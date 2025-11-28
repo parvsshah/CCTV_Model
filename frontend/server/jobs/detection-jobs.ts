@@ -103,18 +103,18 @@ async function verifyPythonEnvironment() {
   try {
     const { stdout } = await promisify(exec)(`${pythonBin} --version`);
     console.log(`[INFO] Using Python: ${stdout.trim()}`);
-    
+
     // Check for required Python packages
     const { stdout: pipList } = await promisify(exec)(`${pythonBin} -m pip list`);
     const requiredPackages = ['torch', 'torchvision', 'opencv-python', 'numpy'];
     const missingPackages = requiredPackages.filter(pkg => !pipList.includes(pkg));
-    
+
     if (missingPackages.length > 0) {
       console.error(`[ERROR] Missing required Python packages: ${missingPackages.join(', ')}`);
       console.error('Please install them using: pip install -r requirements.txt');
       return false;
     }
-    
+
     return true;
   } catch (error) {
     console.error('[ERROR] Failed to verify Python environment:', error);
@@ -137,15 +137,15 @@ async function initializeEnvironment() {
   environmentCheckInProgress = true;
   try {
     console.log('[INFO] Verifying environment...');
-    
+
     // Check model exists
     const modelExists = await verifyModelExists();
     if (!modelExists) return false;
-    
+
     // Check Python environment
     const pythonOk = await verifyPythonEnvironment();
     if (!pythonOk) return false;
-    
+
     isEnvironmentReady = true;
     console.log('[INFO] Environment verification successful');
     return true;
@@ -178,17 +178,17 @@ async function listFiles(dir: string): Promise<Set<string>> {
   try {
     // Ensure directory exists and is accessible
     await fs.access(dir);
-    
+
     // Read directory contents
     const entries = await fs.readdir(dir, { withFileTypes: true });
-    
+
     // Filter out directories and get absolute paths
     const files = await Promise.all(
       entries
         .filter(entry => entry.isFile())
         .map(entry => path.resolve(dir, entry.name))
     );
-    
+
     return new Set(files);
   } catch {
     return new Set<string>();
@@ -260,14 +260,14 @@ async function listNewFiles(previous: Set<string>, dir: string): Promise<string[
     await fs.access(dir);
     const currentFiles = await listFiles(dir);
     const newFiles: string[] = [];
-    
+
     // Find files that weren't in the previous snapshot
     for (const file of currentFiles) {
       if (!previous.has(file)) {
         newFiles.push(file);
       }
     }
-    
+
     // Get file stats for all new files
     const filesWithStats = await Promise.all(
       newFiles.map(async (file) => {
@@ -280,12 +280,12 @@ async function listNewFiles(previous: Set<string>, dir: string): Promise<string[
         }
       })
     );
-    
+
     // Sort by modification time (newest first)
     return filesWithStats
       .sort((a, b) => b.mtime - a.mtime)
       .map(entry => entry.file);
-      
+
   } catch (error) {
     // If directory doesn't exist or can't be accessed, return empty array
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -384,19 +384,19 @@ function serializeJob(job: DetectionJobInternal): DetectionJobSummary {
     config: job.config,
     artifacts: job.artifacts
       ? {
-          video: makePublicPath(job.artifacts.video),
-          csv: makePublicPath(job.artifacts.csv),
-          alerts: job.artifacts.alerts?.map((file) => makePublicPath(file)!),
-        }
+        video: makePublicPath(job.artifacts.video),
+        csv: makePublicPath(job.artifacts.csv),
+        alerts: job.artifacts.alerts?.map((file) => makePublicPath(file)!),
+      }
       : undefined,
     stats: job.stats,
     prediction: job.prediction
       ? {
-          futureSteps: job.prediction.futureSteps,
-          generatedAt: job.prediction.generatedAt.toISOString(),
-          csv: makePublicPath(job.prediction.csv),
-          plot: makePublicPath(job.prediction.plot),
-        }
+        futureSteps: job.prediction.futureSteps,
+        generatedAt: job.prediction.generatedAt.toISOString(),
+        csv: makePublicPath(job.prediction.csv),
+        plot: makePublicPath(job.prediction.plot),
+      }
       : undefined,
     error: job.error,
   };
@@ -412,7 +412,7 @@ function parseConfidence(confidence: number) {
 function buildArgs(job: DetectionJobInternal) {
   // Ensure output directory exists
   const outputDir = path.join(processedDir, job.id);
-  
+
   // Build the command line arguments
   const args = [
     scriptPath,
@@ -433,6 +433,9 @@ function buildArgs(job: DetectionJobInternal) {
   if (job.config.maxFrames > 0) {
     args.push('--max-frames', job.config.maxFrames.toString());
   }
+
+  // Enable frame streaming for web dashboard
+  args.push('--stream-frames');
 
   console.log(`[DEBUG] Python command: ${pythonBin} ${args.join(' ')}`);
   return args;
@@ -464,7 +467,7 @@ async function watchProcess(job: DetectionJobInternal) {
   const args = buildArgs(job);
   const outputDir = path.join(processedDir, job.id);
   const cwd = path.dirname(scriptPath); // Define cwd here
-  
+
   try {
     // Ensure all required directories exist
     await Promise.all([
@@ -482,7 +485,7 @@ async function watchProcess(job: DetectionJobInternal) {
     job.snapshot = await captureSnapshot();
 
     // Update job status
-    job.status = 'processing' as DetectionJobStatus;
+    job.status = 'running' as DetectionJobStatus;
     job.startedAt = new Date();
     job.updatedAt = new Date();
     job.logs = [];
@@ -514,7 +517,7 @@ async function watchProcess(job: DetectionJobInternal) {
     if (job.artifacts?.video) {
       job.video = job.artifacts.video;
     }
-    
+
   } catch (error) {
     // Handle any errors in the process
     const errorMsg = error instanceof Error ? error.message : String(error);
@@ -523,7 +526,7 @@ async function watchProcess(job: DetectionJobInternal) {
     job.updatedAt = new Date();
     job.logs.push(`[ERROR] ${job.error}`);
     console.error(`[JOB ${job.id}] ${job.error}`);
-    
+
     // Clean up any resources if needed
     if (job.processPid) {
       try {
@@ -625,18 +628,18 @@ async function ensureDirectories() {
     predictionsDir,
     uploadsDir
   ];
-  
-  await Promise.all(dirs.map(dir => 
+
+  await Promise.all(dirs.map(dir =>
     fs.mkdir(dir, { recursive: true })
       .catch(err => console.error(`Error creating directory ${dir}:`, err))
   ));
-  
+
   console.log('Ensured all required directories exist');
   return true;
 }
 
 // Run directory check on startup
-void ensureDirectories().then(() => 
+void ensureDirectories().then(() =>
   console.log('Directory initialization complete')
 ).catch(console.error);
 
@@ -740,7 +743,7 @@ async function runPythonProcess(args: string[], cwd: string, jobId?: string) {
     process.stdout.on('data', (data) => {
       const text = data.toString().trim();
       if (!text) return;
-      
+
       stdout += text + '\n';
       const lines = text.split('\n').filter(Boolean);
       lines.forEach(line => {
@@ -751,7 +754,7 @@ async function runPythonProcess(args: string[], cwd: string, jobId?: string) {
     process.stderr.on('data', (data) => {
       const text = data.toString().trim();
       if (!text) return;
-      
+
       stderr += text + '\n';
       const lines = text.split('\n').filter(Boolean);
       lines.forEach(line => {
@@ -766,7 +769,7 @@ async function runPythonProcess(args: string[], cwd: string, jobId?: string) {
 
     process.on('close', (code) => {
       const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-      
+
       if (code === 0) {
         console.log(`[JOB ${jobId || 'unknown'}] Process completed successfully in ${duration}s`);
         resolve({ stdout, stderr });

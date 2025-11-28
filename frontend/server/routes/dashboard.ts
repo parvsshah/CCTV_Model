@@ -179,5 +179,26 @@ router.get("/api/dashboard/stats", async (_req, res) => {
   }
 });
 
+// Get currently processing jobs for live stream display
+router.get("/api/dashboard/processing-jobs", (_req, res) => {
+  try {
+    const jobs = listDetectionJobs();
+    const processingJobs = jobs
+      .filter((j) => j.status === "running" || j.status === "queued")
+      .slice(0, 4) // Limit to 4 concurrent streams
+      .map((job) => ({
+        id: job.id,
+        name: job.sourceName,
+        status: job.status,
+        streamUrl: `/api/detection/jobs/${job.id}/stream`,
+        stats: job.stats,
+      }));
+    res.json({ jobs: processingJobs });
+  } catch (error) {
+    console.error("[dashboard:processing-jobs] Failed to get processing jobs", error);
+    res.status(500).json({ message: "Failed to get processing jobs" });
+  }
+});
+
 export default router;
 

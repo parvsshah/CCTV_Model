@@ -166,9 +166,10 @@ def detect(save_img=False):
     processed_dir = output_dir / 'processed'
     alert_dir = output_dir / 'alerts'
     tracking_dir = output_dir / 'tracking'
+    stream_dir = output_dir / 'stream'  # For real-time frame streaming
     
     # Create directories if they don't exist
-    for dir_path in [processed_dir, alert_dir, tracking_dir]:
+    for dir_path in [processed_dir, alert_dir, tracking_dir, stream_dir]:
         dir_path.mkdir(parents=True, exist_ok=True)
     
     # Generate timestamp for file naming
@@ -487,6 +488,16 @@ def detect(save_img=False):
                         print("Continuing without display...")
                     view_img = False
 
+
+            # Save frame for web streaming if enabled
+            if getattr(opt, 'stream_frames', False):
+                try:
+                    stream_frame_path = stream_dir / 'latest.jpg'
+                    cv2.imwrite(str(stream_frame_path), im0, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                except Exception as e:
+                    if frame_count == 1:
+                        print(f"Warning: Could not save stream frame: {e}")
+
             # Save results
             if save_img:
                 if dataset.mode == 'image':
@@ -597,6 +608,7 @@ if __name__ == '__main__':
         parser.add_argument('--frame-skip', type=int, default=1, help='process every Nth frame (1=all frames)')
         parser.add_argument('--max-frames', type=int, default=0, help='maximum frames to process (0=all)')
         parser.add_argument('--base-max', type=int, default=15, help='base maximum for color coding')
+        parser.add_argument('--stream-frames', action='store_true', help='save frames for web streaming')
         
         opt = parser.parse_args()
         return opt

@@ -9,6 +9,7 @@ import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "rec
 import { apiClient } from "@/lib/api";
 import { DashboardStatsResponse, AlertSummary, DetectionJob } from "@shared/api";
 import { useToast } from "@/hooks/use-toast";
+import { LiveProcessingBox } from "@/components/LiveProcessingBox";
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardStatsResponse | null>(null);
@@ -70,8 +71,8 @@ export default function Dashboard() {
           <p className="text-muted-foreground">Live overview of detections and capacity.</p>
         </div>
         <div className="flex gap-2">
-          <Button asChild variant="secondary"><Link to="/live"><Play className="h-4 w-4"/> Start Live</Link></Button>
-          <Button asChild><Link to="/upload"><UploadCloud className="h-4 w-4"/> Upload</Link></Button>
+          <Button asChild variant="secondary"><Link to="/live"><Play className="h-4 w-4" /> Start Live</Link></Button>
+          <Button asChild><Link to="/upload"><UploadCloud className="h-4 w-4" /> Upload</Link></Button>
         </div>
       </div>
 
@@ -92,7 +93,7 @@ export default function Dashboard() {
               <LineChart data={data.chart} margin={{ left: 8, right: 8, bottom: 8 }}>
                 <XAxis dataKey="time" hide tick={{ fill: "currentColor" }} />
                 <YAxis hide tick={{ fill: "currentColor" }} />
-                <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))" }} labelStyle={{ color: "hsl(var(--muted-foreground))" }}/>
+                <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))" }} labelStyle={{ color: "hsl(var(--muted-foreground))" }} />
                 <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
@@ -101,12 +102,12 @@ export default function Dashboard() {
         <Card className="border-slate-200">
           <CardHeader className="flex flex-row items-center justify-between pb-3">
             <CardTitle className="text-base">Live Alerts</CardTitle>
-            <Button asChild variant="ghost" size="sm"><Link to="/settings" className="gap-1">Configure <ArrowRight className="h-4 w-4"/></Link></Button>
+            <Button asChild variant="ghost" size="sm"><Link to="/settings" className="gap-1">Configure <ArrowRight className="h-4 w-4" /></Link></Button>
           </CardHeader>
           <CardContent>
             <div className="space-y-2.5">
               {data.alerts.map((a) => (
-                <div key={a.id} className={cnByLevel(a.level, "flex items-center justify-between rounded-lg border p-3 text-sm") }>
+                <div key={a.id} className={cnByLevel(a.level, "flex items-center justify-between rounded-lg border p-3 text-sm")}>
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <AlertTriangle className={cnByLevel(a.level, "h-4 w-4 flex-shrink-0", true)} />
                     <div className="min-w-0">
@@ -168,6 +169,9 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </section>
+
+      {/* Live Processing Section */}
+      <LiveProcessingSection />
     </AppLayout>
   );
 }
@@ -203,4 +207,46 @@ function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins}:${String(secs).padStart(2, "0")}`;
+}
+
+function LiveProcessingSection() {
+  const [processingJobs, setProcessingJobs] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchProcessingJobs = async () => {
+      try {
+        const response = await fetch("/api/dashboard/processing-jobs");
+        if (response.ok) {
+          const data = await response.json();
+          setProcessingJobs(data.jobs || []);
+        }
+      } catch (error) {
+        console.error("Failed to fetch processing jobs:", error);
+      }
+    };
+
+    fetchProcessingJobs();
+    const interval = setInterval(fetchProcessingJobs, 2000); // Poll every 2 seconds
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <section className="mt-8">
+      <Card className="border-slate-200">
+        <CardHeader>
+          <CardTitle className="text-base">Live Feed</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {processingJobs.length > 0 ? (
+            <LiveProcessingBox jobs={processingJobs} />
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>No jobs currently processing.</p>
+              <p className="text-sm mt-2">Upload a video to see live processing here.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </section>
+  );
 }

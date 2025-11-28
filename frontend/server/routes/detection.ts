@@ -36,10 +36,10 @@ const storage = multer.diskStorage({
 const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   const ext = path.extname(file.originalname).toLowerCase();
   const allowedExtensions = [
-    '.mp4', '.avi', '.mov', '.mkv', '.webm', 
+    '.mp4', '.avi', '.mov', '.mkv', '.webm',
     '.wmv', '.flv', '.m4v', '.mpg', '.mpeg'
   ];
-  
+
   if (allowedExtensions.includes(ext)) {
     return cb(null, true);
   }
@@ -100,7 +100,7 @@ router.post(
         // Check if the file has a valid extension
         const ext = path.extname(file.originalname).toLowerCase();
         const allowedExtensions = ['.mp4', '.avi', '.mov', '.mkv', '.webm', '.wmv', '.flv', '.m4v', '.mpg', '.mpeg'];
-        
+
         if (!ext || !allowedExtensions.includes(ext)) {
           // If no extension or invalid extension, try to determine it from the file
           const detectedExt = await detectFileExtension(file.path);
@@ -112,8 +112,8 @@ router.post(
           } else {
             // Clean up the invalid file
             await fs.unlink(file.path).catch(console.error);
-            return res.status(400).json({ 
-              message: `Invalid file type. Allowed types: ${allowedExtensions.join(', ')}` 
+            return res.status(400).json({
+              message: `Invalid file type. Allowed types: ${allowedExtensions.join(', ')}`
             });
           }
         }
@@ -131,7 +131,7 @@ router.post(
 
       const config = parseConfig(req.body);
       const sourcePath = sourceType === "upload" && file ? file.path : (streamUrl as string);
-      
+
       const job = await createDetectionJob({
         sourceType,
         sourcePath,
@@ -144,12 +144,12 @@ router.post(
       return res.status(201).json(response);
     } catch (error) {
       console.error("[detection:start] Failed to create job", error);
-      
+
       // Clean up uploaded file if there was an error
       if (req.file?.path) {
         await fs.unlink(req.file.path).catch(console.error);
       }
-      
+
       const message = error instanceof Error ? error.message : "Failed to start detection job";
       return res.status(500).json({ message });
     }
@@ -181,6 +181,41 @@ router.post("/api/detection/jobs/:id/predict", async (req, res) => {
     console.error("[detection:predict] Failed", error);
     const message = error instanceof Error ? error.message : "Failed to generate prediction";
     res.status(400).json({ message });
+  }
+});
+
+// Serve live stream frames
+router.get("/api/detection/jobs/:id/stream", async (req, res) => {
+  const jobId = req.params.id;
+  try {
+    const job = getDetectionJob(jobId);
+    if (!job) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    // Path to the stream frame
+    const streamFramePath = path.join(detectionPaths.processedDir, jobId, "stream", "latest.jpg");
+
+    // Check if frame exists
+    try {
+      await fs.access(streamFramePath);
+
+      // Set headers for no-cache to ensure fresh frames
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+      res.setHeader("Content-Type", "image/jpeg");
+
+      // Send the frame
+      res.sendFile(streamFramePath);
+    } catch (error) {
+      // Frame doesn't exist yet, send placeholder or 404
+      res.status(404).json({ message: "Stream frame not available yet" });
+    }
+  } catch (error) {
+    console.error("[detection:stream] Failed", error);
+    const message = error instanceof Error ? error.message : "Failed to get stream frame";
+    res.status(500).json({ message });
   }
 });
 
