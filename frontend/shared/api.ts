@@ -42,6 +42,7 @@ export interface DetectionJob {
   durationSeconds: number;
   startedAt: string;
   completedAt?: string;
+  videoUrl?: string; // URL to processed video
 }
 
 export interface AlertSummary {

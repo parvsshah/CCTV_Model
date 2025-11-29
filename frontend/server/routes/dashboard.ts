@@ -156,6 +156,7 @@ function mapJobToDetectionJob(job: ReturnType<typeof listDetectionJobs>[0]): Det
     durationSeconds,
     startedAt,
     completedAt,
+    videoUrl: job.artifacts?.video, // Include video URL if available
   };
 }
 

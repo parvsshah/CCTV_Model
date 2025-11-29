@@ -3,17 +3,20 @@ import AppLayout from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowRight, AlertTriangle, Play, UploadCloud } from "lucide-react";
+import { ArrowRight, AlertTriangle, Play, UploadCloud, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { apiClient } from "@/lib/api";
 import { DashboardStatsResponse, AlertSummary, DetectionJob } from "@shared/api";
 import { useToast } from "@/hooks/use-toast";
 import { LiveProcessingBox } from "@/components/LiveProcessingBox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardStatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [videoModalOpen, setVideoModalOpen] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState<{ url: string; name: string } | null>(null);
   const { toast } = useToast();
 
   console.log("[Dashboard] Component rendered, loading:", loading, "data:", data);
@@ -90,9 +93,22 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.chart} margin={{ left: 8, right: 8, bottom: 8 }}>
-                <XAxis dataKey="time" hide tick={{ fill: "currentColor" }} />
-                <YAxis hide tick={{ fill: "currentColor" }} />
+              <LineChart data={data.chart} margin={{ left: 8, right: 8, bottom: 20, top: 8 }}>
+                <XAxis
+                  dataKey="time"
+                  stroke="#888888"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                  label={{ value: 'Time', position: 'insideBottom', offset: -10, style: { fontSize: 12, fill: '#888888' } }}
+                />
+                <YAxis
+                  stroke="#888888"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                  label={{ value: 'People Count', angle: -90, position: 'insideLeft', style: { fontSize: 12, fill: '#888888' } }}
+                />
                 <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))" }} labelStyle={{ color: "hsl(var(--muted-foreground))" }} />
                 <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} dot={false} />
               </LineChart>
@@ -152,7 +168,22 @@ export default function Dashboard() {
                       <TableCell className="text-foreground">{j.maxPeople}</TableCell>
                       <TableCell className="text-foreground">{formatDuration(j.durationSeconds)}</TableCell>
                       <TableCell className="text-right">
-                        <Button asChild size="sm" variant="ghost" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"><Link to={`/results?jobId=${j.id}`}>Open</Link></Button>
+                        <div className="flex items-center justify-end gap-2">
+                          {j.status === "completed" && j.videoUrl && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              onClick={() => {
+                                setSelectedVideo({ url: j.videoUrl!, name: j.name });
+                                setVideoModalOpen(true);
+                              }}
+                            >
+                              View Video
+                            </Button>
+                          )}
+                          <Button asChild size="sm" variant="ghost" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"><Link to={`/results?jobId=${j.id}`}>Open</Link></Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -172,6 +203,27 @@ export default function Dashboard() {
 
       {/* Live Processing Section */}
       <LiveProcessingSection />
+
+      {/* Video Player Modal */}
+      <Dialog open={videoModalOpen} onOpenChange={setVideoModalOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>{selectedVideo?.name || "Processed Video"}</DialogTitle>
+          </DialogHeader>
+          <div className="w-full">
+            {selectedVideo && (
+              <video
+                controls
+                autoPlay
+                className="w-full rounded-lg"
+                src={selectedVideo.url}
+              >
+                Your browser does not support the video tag.
+              </video>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
