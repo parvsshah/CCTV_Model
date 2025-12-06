@@ -56,10 +56,12 @@ export interface AlertSummary {
 
 export interface DashboardStatsResponse {
   totals: {
-    detectionsToday: number;
+    detectionsToday: number;        // Total sum (for backward compatibility)
+    averageCrowdCount: number;      // Normalized average count
     activeAlerts: number;
     processingJobs: number;
     avgDensity: number;
+    timeRangeLabel?: string;        // e.g., "Last 2 hours"
   };
   jobs: DetectionJob[];
   alerts: AlertSummary[];
@@ -146,4 +148,18 @@ export interface DetectionPredictionResponse {
     csv?: string;
     plot?: string;
   };
+}
+
+// Detection view preferences
+export type DetectionViewMode = "average" | "total";
+export type TimeRange = "30min" | "1hour" | "2hours" | "3hours" | "5hours";
+
+export interface UserPreferences {
+  detectionViewMode: DetectionViewMode;
+  timeRange: TimeRange;
+}
+
+// Dashboard stats request with time filtering
+export interface DashboardStatsRequest {
+  timeRange?: TimeRange;
 }

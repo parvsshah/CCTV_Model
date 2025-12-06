@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,9 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, Bell, LogOut, Save, Mail } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { AlertTriangle, Bell, LogOut, Save, Mail, BarChart3 } from "lucide-react";
+import { DetectionViewMode, TimeRange, UserPreferences } from "@shared/api";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Settings() {
+  const { toast } = useToast();
+
+  // Existing settings
   const [notifications, setNotifications] = useState(true);
   const [emailAlerts, setEmailAlerts] = useState(false);
   const [alertThreshold, setAlertThreshold] = useState(80);
@@ -16,8 +23,44 @@ export default function Settings() {
   const [apiKey, setApiKey] = useState("sk_live_••••••••••••••••••••••••");
   const [showApiKey, setShowApiKey] = useState(false);
 
+  // Detection preferences
+  const [detectionViewMode, setDetectionViewMode] = useState<DetectionViewMode>("average");
+  const [timeRange, setTimeRange] = useState<TimeRange>("2hours");
+
+  // Load preferences from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("crowdDetectionPreferences");
+      if (saved) {
+        const prefs: UserPreferences = JSON.parse(saved);
+        setDetectionViewMode(prefs.detectionViewMode);
+        setTimeRange(prefs.timeRange);
+      }
+    } catch (error) {
+      console.error("Failed to load preferences:", error);
+    }
+  }, []);
+
   const handleSave = () => {
-    alert("Settings saved successfully!");
+    try {
+      // Save detection preferences to localStorage
+      const preferences: UserPreferences = {
+        detectionViewMode,
+        timeRange,
+      };
+      localStorage.setItem("crowdDetectionPreferences", JSON.stringify(preferences));
+
+      toast({
+        title: "Settings saved",
+        description: "Your preferences have been updated successfully.",
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Failed to save",
+        description: "Could not save your preferences. Please try again.",
+      });
+    }
   };
 
   return (
@@ -67,6 +110,62 @@ export default function Settings() {
               <div className="bg-blue-100/30 border border-blue-200/50 rounded-lg p-4 flex gap-3">
                 <AlertTriangle className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-foreground">Critical alerts (high severity) will always be sent, regardless of sensitivity settings.</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-2 border-purple-200/50 bg-gradient-to-br from-purple-50/40 to-pink-50/40">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-purple-600" />
+                Detection Display Preferences
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">Configure how crowd metrics are displayed on the dashboard</p>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div>
+                <Label className="text-sm font-medium text-foreground mb-3 block">Detection Count Display</Label>
+                <RadioGroup value={detectionViewMode} onValueChange={(v) => setDetectionViewMode(v as DetectionViewMode)}>
+                  <div className="flex items-center space-x-2 mb-2">
+                    <RadioGroupItem value="average" id="average" />
+                    <Label htmlFor="average" className="font-normal cursor-pointer">
+                      Average Count (Recommended)
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="total" id="total" />
+                    <Label htmlFor="total" className="font-normal cursor-pointer">
+                      Total Count (Sum of all frames)
+                    </Label>
+                  </div>
+                </RadioGroup>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Average count normalizes detections by dividing total by number of frames, providing a more accurate representation.
+                </p>
+              </div>
+
+              <div>
+                <Label className="text-sm font-medium text-foreground mb-3 block">Time Range for Dashboard</Label>
+                <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
+                  <SelectTrigger className="border-purple-200/50 rounded-lg">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="30min">Last 30 minutes</SelectItem>
+                    <SelectItem value="1hour">Last 1 hour</SelectItem>
+                    <SelectItem value="2hours">Last 2 hours</SelectItem>
+                    <SelectItem value="3hours">Last 3 hours</SelectItem>
+                    <SelectItem value="5hours">Last 5 hours</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Choose the time window for dashboard metrics and charts.
+                </p>
+              </div>
+
+              <div className="bg-purple-100/30 border border-purple-200/50 rounded-lg p-4 flex gap-3">
+                <AlertTriangle className="h-4 w-4 text-purple-600 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-foreground">Changes will apply immediately after saving and refreshing the dashboard.</p>
               </div>
             </CardContent>
           </Card>

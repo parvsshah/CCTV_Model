@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { DashboardStatsResponse, DetectionJob, AlertSummary } from "@shared/api";
+import { DashboardStatsResponse, DetectionJob, AlertSummary, TimeRange } from "@shared/api";
 import { listDetectionJobs } from "../jobs/detection-jobs";
 import fs from "fs/promises";
 import path from "path";
@@ -14,6 +14,42 @@ const runsDir = path.resolve(projectRoot, "runs");
 const trackingDir = path.resolve(runsDir, "crowd_tracking");
 
 const router = Router();
+
+// Time range utilities
+function getTimeRangeInMinutes(range: TimeRange): number {
+  const ranges: Record<TimeRange, number> = {
+    "30min": 30,
+    "1hour": 60,
+    "2hours": 120,
+    "3hours": 180,
+    "5hours": 300,
+  };
+  return ranges[range];
+}
+
+function getTimeRangeLabel(range: TimeRange): string {
+  const labels: Record<TimeRange, string> = {
+    "30min": "Last 30 minutes",
+    "1hour": "Last 1 hour",
+    "2hours": "Last 2 hours",
+    "3hours": "Last 3 hours",
+    "5hours": "Last 5 hours",
+  };
+  return labels[range];
+}
+
+function filterJobsByTimeRange(jobs: ReturnType<typeof listDetectionJobs>, timeRange?: TimeRange) {
+  if (!timeRange) {
+    // Default: today's jobs
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return jobs.filter((j) => new Date(j.createdAt) >= today);
+  }
+
+  const minutes = getTimeRangeInMinutes(timeRange);
+  const cutoff = new Date(Date.now() - minutes * 60 * 1000);
+  return jobs.filter((j) => new Date(j.createdAt) >= cutoff);
+}
 
 function parseCsvForChart(csvPath: string): Promise<Array<{ time: string; value: number }>> {
   return fs
@@ -110,19 +146,36 @@ function aggregateChartData(jobs: ReturnType<typeof listDetectionJobs>): Promise
 
 function calculateStats(jobs: ReturnType<typeof listDetectionJobs>): {
   detectionsToday: number;
+  averageCrowdCount: number;
   activeAlerts: number;
   processingJobs: number;
   avgDensity: number;
 } {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayJobs = jobs.filter((j) => new Date(j.createdAt) >= today);
   let detectionsToday = 0;
+  let totalPeopleSum = 0;
+  let totalFrames = 0;
   let totalDensity = 0;
   let densityCount = 0;
-  for (const job of todayJobs) {
+
+  for (const job of jobs) {
     if (job.stats) {
+      // Total detections (sum of all people in all frames)
       detectionsToday += job.stats.totalDetections;
+
+      // For average calculation: sum of people across frames
+      // totalDetections = sum of people in all frames
+      // So we can use it directly
+      totalPeopleSum += job.stats.totalDetections;
+
+      // Get frame count from stats if available
+      // Note: stats.totalDetections is already the sum, we need processedFrames
+      // We'll calculate average using averagePeople * processedFrames for accuracy
+      if (job.stats.averagePeople !== undefined) {
+        // If we have processedFrames in stats, use it
+        const frames = Math.round(job.stats.totalDetections / (job.stats.averagePeople || 1));
+        totalFrames += frames;
+      }
+
       if (job.stats.currentMax > 0) {
         const density = (job.stats.averagePeople / job.stats.currentMax) * 100;
         totalDensity += density;
@@ -130,6 +183,10 @@ function calculateStats(jobs: ReturnType<typeof listDetectionJobs>): {
       }
     }
   }
+
+  // Calculate average crowd count: total people / total frames
+  const averageCrowdCount = totalFrames > 0 ? Math.round(totalPeopleSum / totalFrames) : 0;
+
   const activeAlerts = jobs.filter(
     (j) =>
       j.status === "completed" &&
@@ -138,7 +195,8 @@ function calculateStats(jobs: ReturnType<typeof listDetectionJobs>): {
   ).length;
   const processingJobs = jobs.filter((j) => j.status === "running" || j.status === "queued").length;
   const avgDensity = densityCount > 0 ? Math.round((totalDensity / densityCount) * 10) / 10 : 0;
-  return { detectionsToday, activeAlerts, processingJobs, avgDensity };
+
+  return { detectionsToday, averageCrowdCount, activeAlerts, processingJobs, avgDensity };
 }
 
 function mapJobToDetectionJob(job: ReturnType<typeof listDetectionJobs>[0]): DetectionJob {
@@ -160,15 +218,24 @@ function mapJobToDetectionJob(job: ReturnType<typeof listDetectionJobs>[0]): Det
   };
 }
 
-router.get("/api/dashboard/stats", async (_req, res) => {
+router.get("/api/dashboard/stats", async (req, res) => {
   try {
-    const jobs = listDetectionJobs();
-    const stats = calculateStats(jobs);
-    const alerts = deriveAlertsFromJobs(jobs);
-    const chart = await aggregateChartData(jobs);
-    const detectionJobs = jobs.slice(0, 10).map(mapJobToDetectionJob);
+    const timeRange = req.query.timeRange as TimeRange | undefined;
+    const allJobs = listDetectionJobs();
+
+    // Filter jobs by time range
+    const filteredJobs = filterJobsByTimeRange(allJobs, timeRange);
+
+    const stats = calculateStats(filteredJobs);
+    const alerts = deriveAlertsFromJobs(filteredJobs);
+    const chart = await aggregateChartData(filteredJobs);
+    const detectionJobs = filteredJobs.slice(0, 10).map(mapJobToDetectionJob);
+
     const response: DashboardStatsResponse = {
-      totals: stats,
+      totals: {
+        ...stats,
+        timeRangeLabel: timeRange ? getTimeRangeLabel(timeRange) : "Today",
+      },
       jobs: detectionJobs,
       alerts,
       chart,

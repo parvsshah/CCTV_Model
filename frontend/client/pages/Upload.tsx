@@ -10,7 +10,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { apiClient } from "@/lib/api";
 import type { DetectionJobSummary } from "@shared/api";
 
-interface Zone { id: string; name: string; max: number; points: { x:number; y:number }[] }
+interface Zone { id: string; name: string; max: number; points: { x: number; y: number }[] }
 
 export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -89,14 +89,14 @@ export default function UploadPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <label
-                onDragOver={(e)=>e.preventDefault()}
+                onDragOver={(e) => e.preventDefault()}
                 onDrop={handleDrop}
                 className="flex flex-col items-center justify-center border-2 border-dashed border-blue-300/50 rounded-2xl p-12 text-center cursor-pointer hover:bg-blue-100/30 transition-colors"
               >
                 <UploadCloud className="h-8 w-8 mb-3 text-blue-600" />
                 <p className="text-sm font-medium text-foreground">Drag & drop video here</p>
                 <p className="text-xs text-muted-foreground mt-1">or click to browse (MP4, MOV, AVI)</p>
-                <input type="file" accept="video/*" className="hidden" onChange={(e)=> setFile(e.target.files?.[0] || null)} />
+                <input type="file" accept="video/*" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
               </label>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
@@ -105,7 +105,7 @@ export default function UploadPage() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-foreground mb-2">Stream URL</p>
-                  <Input placeholder="rtsp://... or https://..." value={url} onChange={(e)=> setUrl(e.target.value)} className="border-slate-200/50 rounded-lg" />
+                  <Input placeholder="rtsp://... or https://..." value={url} onChange={(e) => setUrl(e.target.value)} className="border-slate-200/50 rounded-lg" />
                 </div>
               </div>
             </CardContent>
@@ -150,22 +150,22 @@ export default function UploadPage() {
   );
 }
 
-function ConfigSlider({ label, value, onChange, min, max, step, suffix }: { label:string; value:number; onChange:(v:number)=>void; min:number; max:number; step:number; suffix?: string }) {
+function ConfigSlider({ label, value, onChange, min, max, step, suffix }: { label: string; value: number; onChange: (v: number) => void; min: number; max: number; step: number; suffix?: string }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-3 text-sm">
         <span className="font-medium text-foreground">{label}</span>
         <span className="text-blue-600 font-semibold">{value}{suffix || ""}</span>
       </div>
-      <Slider value={[value]} min={min} max={max} step={step} onValueChange={(v)=> onChange(v[0])} className="rounded-full" />
+      <Slider value={[value]} min={min} max={max} step={step} onValueChange={(v) => onChange(v[0])} className="rounded-full" />
     </div>
   );
 }
 
-function RestrictedZones({ zones, setZones }: { zones: Zone[]; setZones: (z:Zone[])=>void }) {
+function RestrictedZones({ zones, setZones }: { zones: Zone[]; setZones: (z: Zone[]) => void }) {
   const [name, setName] = useState("");
   const [max, setMax] = useState(50);
-  const [points, setPoints] = useState<{x:number;y:number}[]>([]);
+  const [points, setPoints] = useState<{ x: number; y: number }[]>([]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const redraw = useCallback(() => {
@@ -173,22 +173,22 @@ function RestrictedZones({ zones, setZones }: { zones: Zone[]; setZones: (z:Zone
     const ctx = canvas.getContext("2d"); if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#1a1a1a";
-    ctx.fillRect(0,0,canvas.width, canvas.height);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     if (points.length) {
       ctx.beginPath();
       ctx.moveTo(points[0].x, points[0].y);
-      for (let i=1;i<points.length;i++) ctx.lineTo(points[i].x, points[i].y);
+      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
       ctx.strokeStyle = "#3b82f6";
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.fillStyle = "#93c5fd";
-      points.forEach(p=> { ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill(); });
+      points.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill(); });
     }
     zones.forEach((z) => {
       if (z.points.length < 3) return;
       ctx.beginPath();
       ctx.moveTo(z.points[0].x, z.points[0].y);
-      for (let i=1;i<z.points.length;i++) ctx.lineTo(z.points[i].x, z.points[i].y);
+      for (let i = 1; i < z.points.length; i++) ctx.lineTo(z.points[i].x, z.points[i].y);
       ctx.closePath();
       ctx.fillStyle = "rgba(59, 130, 246, 0.2)";
       ctx.strokeStyle = "#60a5fa";
@@ -236,35 +236,35 @@ function RestrictedZones({ zones, setZones }: { zones: Zone[]; setZones: (z:Zone
                 className="w-full bg-slate-900 cursor-crosshair"
               />
               <div className="absolute top-3 left-3 bg-black/60 text-white text-xs px-3 py-1.5 rounded-lg flex items-center gap-2 font-medium">
-                <MousePointer2 className="h-3 w-3"/> Click to add points
+                <MousePointer2 className="h-3 w-3" /> Click to add points
               </div>
             </div>
           </div>
           <div className="lg:col-span-2 space-y-4">
             <div>
               <label className="text-sm font-medium text-foreground block mb-2">Zone name</label>
-              <Input value={name} onChange={(e)=> setName(e.target.value)} placeholder="e.g., Exit Corridor" className="border-slate-200/50 rounded-lg" />
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Exit Corridor" className="border-slate-200/50 rounded-lg" />
             </div>
             <ConfigSlider label="Max people" value={max} onChange={setMax} min={10} max={500} step={10} />
             <div className="flex gap-2 pt-2">
               <Button onClick={onClosePolygon} disabled={points.length < 3 || !name.trim()} className="flex-1 bg-blue-500 hover:bg-blue-600 rounded-lg">
                 Save Zone
               </Button>
-              <Button variant="outline" onClick={()=> setPoints([])} className="flex-1 border-slate-200/50 rounded-lg">
+              <Button variant="outline" onClick={() => setPoints([])} className="flex-1 border-slate-200/50 rounded-lg">
                 Reset
               </Button>
             </div>
             <div className="pt-2 border-t border-slate-200/50">
               <p className="text-sm font-medium text-foreground mb-3">Zones ({zones.length})</p>
               <div className="space-y-2 max-h-60 overflow-auto pr-1">
-                {zones.map((z)=> (
+                {zones.map((z) => (
                   <div key={z.id} className="flex items-center justify-between rounded-lg border border-slate-200/50 bg-slate-50/50 p-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground">{z.name}</p>
                       <p className="text-xs text-muted-foreground">Max: {z.max} • {z.points.length} points</p>
                     </div>
-                    <Button variant="ghost" size="icon" onClick={()=> onDelete(z.id)} className="text-red-600 hover:bg-red-50" aria-label={`Delete ${z.name}`}>
-                      <Trash2 className="h-4 w-4"/>
+                    <Button variant="ghost" size="icon" onClick={() => onDelete(z.id)} className="text-red-600 hover:bg-red-50" aria-label={`Delete ${z.name}`}>
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}

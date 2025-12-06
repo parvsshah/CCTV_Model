@@ -7,7 +7,7 @@ import { ArrowRight, AlertTriangle, Play, UploadCloud, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { apiClient } from "@/lib/api";
-import { DashboardStatsResponse, AlertSummary, DetectionJob } from "@shared/api";
+import { DashboardStatsResponse, AlertSummary, DetectionJob, UserPreferences } from "@shared/api";
 import { useToast } from "@/hooks/use-toast";
 import { LiveProcessingBox } from "@/components/LiveProcessingBox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -19,13 +19,29 @@ export default function Dashboard() {
   const [selectedVideo, setSelectedVideo] = useState<{ url: string; name: string } | null>(null);
   const { toast } = useToast();
 
+  // Load user preferences
+  const [preferences, setPreferences] = useState<UserPreferences>(() => {
+    try {
+      const saved = localStorage.getItem("crowdDetectionPreferences");
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (error) {
+      console.error("Failed to load preferences:", error);
+    }
+    return { detectionViewMode: "average", timeRange: "2hours" };
+  });
+
   console.log("[Dashboard] Component rendered, loading:", loading, "data:", data);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await apiClient.dashboard.stats();
-        setData(response);
+        // Pass time range to API
+        const response = await fetch(`/api/dashboard/stats?timeRange=${preferences.timeRange}`);
+        if (!response.ok) throw new Error("Failed to fetch stats");
+        const stats: DashboardStatsResponse = await response.json();
+        setData(stats);
       } catch (error) {
         console.error("[Dashboard] Failed to fetch stats:", error);
         toast({
@@ -37,6 +53,7 @@ export default function Dashboard() {
         setData({
           totals: {
             detectionsToday: 0,
+            averageCrowdCount: 0,
             activeAlerts: 0,
             processingJobs: 0,
             avgDensity: 0,
@@ -52,7 +69,7 @@ export default function Dashboard() {
     fetchData();
     const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
-  }, [toast]);
+  }, [toast, preferences.timeRange]);
 
   if (loading || !data) {
     return (
@@ -65,6 +82,13 @@ export default function Dashboard() {
   }
 
   const stats = data.totals;
+
+  // Use appropriate metric based on user preference
+  const displayedDetectionCount = preferences.detectionViewMode === "average"
+    ? stats.averageCrowdCount
+    : stats.detectionsToday;
+
+  const detectionLabel = stats.timeRangeLabel || "Today";
 
   return (
     <AppLayout>
@@ -80,7 +104,10 @@ export default function Dashboard() {
       </div>
 
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4 mb-8">
-        <StatCard title="Total Detections Today" value={stats.detectionsToday.toLocaleString()} />
+        <StatCard
+          title={`Detections (${detectionLabel})`}
+          value={displayedDetectionCount.toLocaleString()}
+        />
         <StatCard title="Active Alerts" value={String(stats.activeAlerts)} variant="alert" />
         <StatCard title="Processing Jobs" value={String(stats.processingJobs)} />
         <StatCard title="Avg Crowd Density" value={`${stats.avgDensity}%`} />
