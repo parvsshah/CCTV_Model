@@ -162,6 +162,14 @@ router.get("/api/detection/jobs", (_req, res) => {
   res.json(response);
 });
 
+// Get only stream jobs (for Live page)
+router.get("/api/detection/jobs/streams", (_req, res) => {
+  const allJobs = listDetectionJobs();
+  const streamJobs = allJobs.filter(job => job.sourceType === "stream");
+  const response: DetectionJobListResponse = { jobs: streamJobs };
+  res.json(response);
+});
+
 router.get("/api/detection/jobs/:id", (req, res) => {
   const job = getDetectionJob(req.params.id);
   if (!job) {
@@ -215,6 +223,31 @@ router.get("/api/detection/jobs/:id/stream", async (req, res) => {
   } catch (error) {
     console.error("[detection:stream] Failed", error);
     const message = error instanceof Error ? error.message : "Failed to get stream frame";
+    res.status(500).json({ message });
+  }
+});
+
+// Terminate a running job
+router.post("/api/detection/jobs/:id/terminate", async (req, res) => {
+  const jobId = req.params.id;
+  try {
+    const job = getDetectionJob(jobId);
+    if (!job) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    if (job.status !== "running") {
+      return res.status(400).json({ message: "Job is not running" });
+    }
+
+    // Import the terminate function
+    const { terminateDetectionJob } = await import("../jobs/detection-jobs.js");
+    await terminateDetectionJob(jobId);
+
+    res.json({ message: "Job terminated successfully" });
+  } catch (error) {
+    console.error("[detection:terminate] Failed", error);
+    const message = error instanceof Error ? error.message : "Failed to terminate job";
     res.status(500).json({ message });
   }
 });

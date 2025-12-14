@@ -496,7 +496,7 @@ async function watchProcess(job: DetectionJobInternal) {
     console.log(`[JOB ${job.id}] Working directory: ${cwd}`);
 
     // Run the Python script with our enhanced process handler
-    await runPythonProcess(args, cwd, job.id);
+    await runPythonProcess(args, cwd, job);
 
     // If we get here, processing completed successfully
     job.status = 'completed' as DetectionJobStatus;
@@ -699,7 +699,8 @@ function computePredictionStats(points: PredictionPoint[], futureSteps: number):
     futureSteps,
   };
 }
-async function runPythonProcess(args: string[], cwd: string, jobId?: string) {
+async function runPythonProcess(args: string[], cwd: string, job: DetectionJobInternal | string) {
+  const jobId = typeof job === 'string' ? job : job.id;
   // Ensure the environment is ready
   const isReady = await initializeEnvironment();
   if (!isReady) {
@@ -728,19 +729,26 @@ async function runPythonProcess(args: string[], cwd: string, jobId?: string) {
 
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     // Use the original args for spawn (not the escaped ones)
-    const process = spawn(pythonBin, args, {
+    const childProcess = spawn(pythonBin, args, {
       cwd,
       env,
       shell: false, // Set to false to avoid shell injection and handle paths with spaces
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
+    // Store the process PID in the job if job object was passed
+    if (typeof job !== 'string' && childProcess.pid) {
+      job.processPid = childProcess.pid;
+      jobs.set(job.id, job);
+      console.log(`[JOB ${jobId}] Process PID: ${childProcess.pid}`);
+    }
+
     let stdout = '';
     let stderr = '';
     const startTime = Date.now();
 
     // Log process output in real-time
-    process.stdout.on('data', (data) => {
+    childProcess.stdout.on('data', (data) => {
       const text = data.toString().trim();
       if (!text) return;
 
@@ -751,7 +759,7 @@ async function runPythonProcess(args: string[], cwd: string, jobId?: string) {
       });
     });
 
-    process.stderr.on('data', (data) => {
+    childProcess.stderr.on('data', (data) => {
       const text = data.toString().trim();
       if (!text) return;
 
@@ -762,12 +770,12 @@ async function runPythonProcess(args: string[], cwd: string, jobId?: string) {
       });
     });
 
-    process.on('error', (error) => {
+    childProcess.on('error', (error) => {
       console.error(`[JOB ${jobId || 'unknown'}-ERROR] Process error:`, error);
       reject(new Error(`Process failed to start: ${error.message}`));
     });
 
-    process.on('close', (code) => {
+    childProcess.on('close', (code) => {
       const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
       if (code === 0) {
@@ -810,7 +818,7 @@ export async function runPredictionForJob(jobId: string, futureSteps: number): P
     csvOut,
   ];
 
-  await runPythonProcess(args, projectRoot);
+  await runPythonProcess(args, projectRoot, jobId);
 
   const data = await parsePredictionCsv(csvOut);
   const stats = computePredictionStats(data, safeFuture);
@@ -835,5 +843,52 @@ export async function runPredictionForJob(jobId: string, futureSteps: number): P
       plot: hasPlot ? makePublicPath(plotPath) : undefined,
     },
   };
+}
+
+export async function terminateDetectionJob(jobId: string): Promise<void> {
+  const job = jobs.get(jobId);
+  if (!job) {
+    throw new Error("Job not found");
+  }
+
+  if (job.status !== "running") {
+    throw new Error("Job is not running");
+  }
+
+  console.log(`[JOB ${jobId}] Terminating job...`);
+
+  // Kill the process if it exists
+  if (job.processPid) {
+    try {
+      process.kill(job.processPid, 'SIGTERM');
+      console.log(`[JOB ${jobId}] Sent SIGTERM to process ${job.processPid}`);
+
+      // Wait a bit, then force kill if still running
+      setTimeout(() => {
+        try {
+          process.kill(job.processPid!, 'SIGKILL');
+          console.log(`[JOB ${jobId}] Sent SIGKILL to process ${job.processPid}`);
+        } catch (e) {
+          // Process already dead, ignore
+        }
+      }, 2000);
+    } catch (error) {
+      console.error(`[JOB ${jobId}] Failed to kill process:`, error);
+    }
+  }
+
+  // Update job status
+  job.status = 'failed' as DetectionJobStatus;
+  job.error = 'Job terminated by user';
+  job.finishedAt = new Date();
+  job.updatedAt = new Date();
+  job.logs.push(`[${job.finishedAt.toISOString()}] Job terminated by user`);
+  job.processPid = undefined;
+
+  // Collect any artifacts that were generated
+  await collectArtifacts(job);
+
+  jobs.set(jobId, job);
+  console.log(`[JOB ${jobId}] Job terminated successfully`);
 }
 
