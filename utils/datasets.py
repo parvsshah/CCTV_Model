@@ -274,10 +274,13 @@ class LoadWebcam:  # for inference
 
 
 class LoadStreams:  # multiple IP or RTSP cameras
-    def __init__(self, sources='streams.txt', img_size=640, stride=32):
+    def __init__(self, sources='streams.txt', img_size=640, stride=32, max_frames=0):
         self.mode = 'stream'
         self.img_size = img_size
         self.stride = stride
+        self.max_frames = max_frames  # Maximum frames to process (0 = unlimited)
+        self.frame_count = 0  # Track total frames processed
+        self.stop_flag = False  # Flag to signal threads to stop
 
         if os.path.isfile(sources):
             with open(sources, 'r') as f:
@@ -289,6 +292,7 @@ class LoadStreams:  # multiple IP or RTSP cameras
         self.imgs = [None] * n
         self.sources = [clean_str(x) for x in sources]  # clean source names for later
         self.caps = [None] * n  # Store capture objects
+        self.threads = []  # Store thread references for cleanup
         
         for i, s in enumerate(sources):
             # Start the thread to read frames from the video stream
@@ -329,6 +333,7 @@ class LoadStreams:  # multiple IP or RTSP cameras
             
             self.caps[i] = cap  # Store capture object
             thread = Thread(target=self.update, args=([i, cap]), daemon=True)
+            self.threads.append(thread)  # Store thread reference
             print(f' success ({w}x{h} at {self.fps:.2f} FPS).')
             thread.start()
         print('')  # newline
@@ -342,7 +347,11 @@ class LoadStreams:  # multiple IP or RTSP cameras
     def update(self, index, cap):
         # Read next stream frame in a daemon thread
         n = 0
-        while cap.isOpened():
+        while cap.isOpened() and not self.stop_flag:
+            # Check if max_frames limit reached
+            if self.max_frames > 0 and self.frame_count >= self.max_frames:
+                break
+            
             n += 1
             cap.grab()
             if n == 4:  # read every 4th frame
@@ -351,6 +360,11 @@ class LoadStreams:  # multiple IP or RTSP cameras
                     self.imgs[index] = im
                 n = 0
             time.sleep(0.01)  # slight delay to prevent CPU overload
+        
+        # Clean up when thread exits
+        if cap.isOpened():
+            cap.release()
+            print(f'Stream {index} stopped gracefully')
 
     def __iter__(self):
         self.count = -1
@@ -358,8 +372,16 @@ class LoadStreams:  # multiple IP or RTSP cameras
 
     def __next__(self):
         self.count += 1
+        self.frame_count += 1  # Increment global frame counter
+        
+        # Check if max_frames limit reached
+        if self.max_frames > 0 and self.frame_count > self.max_frames:
+            self.stop()  # Signal threads to stop
+            raise StopIteration
+        
         img0 = self.imgs.copy()
         if cv2.waitKey(1) == ord('q'):  # q to quit
+            self.stop()  # Signal threads to stop
             cv2.destroyAllWindows()
             raise StopIteration
 
@@ -377,6 +399,26 @@ class LoadStreams:  # multiple IP or RTSP cameras
 
     def __len__(self):
         return 0  # 1E12 frames = 32 streams at 30 FPS for 30 years
+    
+    def stop(self):
+        """Gracefully stop all stream capture threads"""
+        print('\n[INFO] Stopping all streams...')
+        self.stop_flag = True
+        
+        # Wait for all threads to finish (with timeout)
+        for i, thread in enumerate(self.threads):
+            if thread.is_alive():
+                thread.join(timeout=2.0)
+                if thread.is_alive():
+                    print(f'[WARNING] Thread {i} did not stop gracefully')
+        
+        # Release any remaining capture objects
+        for i, cap in enumerate(self.caps):
+            if cap is not None and cap.isOpened():
+                cap.release()
+                print(f'[INFO] Released capture object {i}')
+        
+        print('[INFO] All streams stopped')
 
 
 class LoadImagesAndLabels(Dataset):  # for training/testing

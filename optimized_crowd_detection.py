@@ -298,8 +298,8 @@ def detect(save_img=False):
     if webcam:
         view_img = check_imshow() if view_img else False
         cudnn.benchmark = True
-        dataset = LoadStreams(source, img_size=imgsz, stride=stride)
-        total_frames = float('inf')
+        dataset = LoadStreams(source, img_size=imgsz, stride=stride, max_frames=opt.max_frames)
+        total_frames = opt.max_frames if opt.max_frames > 0 else float('inf')
     else:
         dataset = LoadImages(source, img_size=imgsz, stride=stride, frame_skip=opt.frame_skip)
         total_frames = dataset.nframes if hasattr(dataset, 'nframes') else 0
@@ -528,6 +528,12 @@ def detect(save_img=False):
     avg_fps = processed_frames / total_time if total_time > 0 else 0
     avg_people = total_detections / processed_frames if processed_frames > 0 else 0
     min_people_frame = min_people_frame if min_people_frame != float('inf') else 0
+    
+    # Clean up streams if using LoadStreams
+    if webcam and hasattr(dataset, 'stop'):
+        print('\\n[INFO] Cleaning up stream resources...')
+        dataset.stop()
+        print('[INFO] Stream cleanup complete')
 
     # Print detailed final statistics
     print('\n' + '='*70)
