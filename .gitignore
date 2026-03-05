@@ -6,6 +6,10 @@ __pycache__/
 runs/
 # C extensions
 *.so
+#Uploads folder and mp4 files
+*.mp4
+frontend/uploads/
+
 
 runs/face/*.pt
 *.pt
