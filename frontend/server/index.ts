@@ -6,6 +6,8 @@ import { handleLogin, handleLogout, handleMe } from "./routes/auth";
 import detectionRouter from "./routes/detection";
 import dashboardRouter from "./routes/dashboard";
 import { detectionPaths } from "./jobs/detection-jobs";
+import { connectDB } from "./db/connection";
+import { seedDefaultAdmin } from "./db/seed";
 
 export function createServer() {
   const app = express();
@@ -14,6 +16,13 @@ export function createServer() {
   app.use(cors());
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+
+  // Connect to MongoDB Atlas and seed default admin
+  connectDB()
+    .then(() => seedDefaultAdmin())
+    .catch((err) => {
+      console.warn("[Server] MongoDB connection failed — running in demo mode:", err.message);
+    });
 
   // Example API routes
   app.get("/api/ping", (_req, res) => {

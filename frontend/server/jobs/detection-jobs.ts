@@ -5,6 +5,10 @@ import fs from "fs/promises";
 import { promisify } from "util";
 import { createHash } from "crypto";
 import { detectFileExtension } from "../utils/file-utils";
+import { isDBConnected } from "../db/connection.js";
+import JobModel from "../db/models/Job.js";
+import AlertModel from "../db/models/Alert.js";
+import ResultModel from "../db/models/Result.js";
 
 const execAsync = promisify(exec);
 import {
@@ -73,7 +77,7 @@ const frontendRoot = path.resolve(__dirname, "..", "..");
 const projectRoot = path.resolve(frontendRoot, "..");
 const scriptPath = path.resolve(projectRoot, "optimized_crowd_detection.py");
 const predictionScriptPath = path.resolve(projectRoot, "crowd_prediction.py");
-const pythonBin = process.env.PYTHON_BIN ?? "python3";
+const pythonBin = process.env.PYTHON_BIN ?? "python";
 
 // Paths configuration
 const runsDir = path.resolve(projectRoot, "runs");
@@ -518,6 +522,10 @@ async function watchProcess(job: DetectionJobInternal) {
       job.video = job.artifacts.video;
     }
 
+    // Persist completion to MongoDB
+    await updateJobInDB(job);
+    await persistAlertsForJob(job);
+
   } catch (error) {
     // Handle any errors in the process
     const errorMsg = error instanceof Error ? error.message : String(error);
@@ -526,6 +534,9 @@ async function watchProcess(job: DetectionJobInternal) {
     job.updatedAt = new Date();
     job.logs.push(`[ERROR] ${job.error}`);
     console.error(`[JOB ${job.id}] ${job.error}`);
+
+    // Persist failure to MongoDB
+    await updateJobInDB(job);
 
     // Clean up any resources if needed
     if (job.processPid) {
@@ -602,6 +613,10 @@ export async function createDetectionJob(
 
   job.snapshot = await captureSnapshot();
   jobs.set(id, job);
+
+  // Persist to MongoDB
+  await persistJobToDB(job, input);
+
   void watchProcess(job);
 
   return serializeJob(job);
@@ -834,6 +849,9 @@ export async function runPredictionForJob(jobId: string, futureSteps: number): P
   };
   job.updatedAt = new Date();
 
+  // Persist result to MongoDB
+  await persistResultToDB(job.id, csvOut, stats, hasPlot ? plotPath : undefined);
+
   return {
     jobId: job.id,
     predictions: data,
@@ -888,7 +906,116 @@ export async function terminateDetectionJob(jobId: string): Promise<void> {
   // Collect any artifacts that were generated
   await collectArtifacts(job);
 
+  // Persist termination to MongoDB
+  await updateJobInDB(job);
+
   jobs.set(jobId, job);
   console.log(`[JOB ${jobId}] Job terminated successfully`);
+}
+
+// ── MongoDB Persistence Helpers ──
+
+async function persistJobToDB(job: DetectionJobInternal, input: CreateDetectionJobInput) {
+  if (!isDBConnected()) return;
+  try {
+    await JobModel.create({
+      jobId: job.id,
+      status: job.status,
+      sourceType: job.sourceType,
+      sourceName: job.sourceName,
+      sourcePath: job.sourcePath,
+      config: job.config,
+      notes: job.notes,
+      uploadedFile: input.sourceType === "upload" ? {
+        originalName: input.sourceName,
+        size: 0,
+        storedPath: input.sourcePath,
+      } : undefined,
+      startedAt: job.startedAt,
+    });
+    console.log(`[MongoDB] Job ${job.id} persisted`);
+  } catch (error) {
+    console.error(`[MongoDB] Failed to persist job ${job.id}:`, error);
+  }
+}
+
+async function updateJobInDB(job: DetectionJobInternal) {
+  if (!isDBConnected()) return;
+  try {
+    await JobModel.findOneAndUpdate(
+      { jobId: job.id },
+      {
+        status: job.status,
+        stats: job.stats,
+        error: job.error,
+        processPid: job.processPid,
+        startedAt: job.startedAt,
+        finishedAt: job.finishedAt,
+      },
+    );
+    console.log(`[MongoDB] Job ${job.id} updated (${job.status})`);
+  } catch (error) {
+    console.error(`[MongoDB] Failed to update job ${job.id}:`, error);
+  }
+}
+
+async function persistAlertsForJob(job: DetectionJobInternal) {
+  if (!isDBConnected()) return;
+  if (!job.stats || job.status !== "completed") return;
+
+  try {
+    const dbJob = await JobModel.findOne({ jobId: job.id });
+    if (!dbJob) return;
+
+    const { maxPeople } = job.stats;
+    const threshold = job.config.baseMax * (job.config.confidence / 100);
+
+    if (maxPeople >= threshold * 0.8) {
+      const level: "low" | "medium" | "high" =
+        maxPeople >= threshold * 0.95 ? "high" : maxPeople >= threshold * 0.85 ? "medium" : "low";
+
+      await AlertModel.create({
+        jobId: dbJob._id,
+        level,
+        message:
+          level === "high"
+            ? "Crowd surge detected"
+            : level === "medium"
+              ? "Area nearing capacity"
+              : "Density rising",
+        peopleCount: maxPeople,
+        zone: job.sourceName,
+        triggeredAt: new Date(),
+      });
+      console.log(`[MongoDB] Alert created for job ${job.id} (${level})`);
+    }
+  } catch (error) {
+    console.error(`[MongoDB] Failed to persist alerts for job ${job.id}:`, error);
+  }
+}
+
+async function persistResultToDB(jobId: string, csvPath: string | undefined, stats: DetectionPredictionStats | undefined, plotPath: string | undefined) {
+  if (!isDBConnected()) return;
+  try {
+    const dbJob = await JobModel.findOne({ jobId });
+    if (!dbJob) return;
+
+    await ResultModel.create({
+      jobId: dbJob._id,
+      csvFileId: csvPath,
+      predictedCount: stats?.futureSteps,
+      predictionStats: stats ? {
+        mae: stats.mae,
+        rmse: stats.rmse,
+        historicalPoints: stats.historicalPoints,
+        futureSteps: stats.futureSteps,
+      } : undefined,
+      plotPath,
+      generatedAt: new Date(),
+    });
+    console.log(`[MongoDB] Result persisted for job ${jobId}`);
+  } catch (error) {
+    console.error(`[MongoDB] Failed to persist result for job ${jobId}:`, error);
+  }
 }
 
