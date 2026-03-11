@@ -16,7 +16,7 @@ export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState("");
   const [baseMax, setBaseMax] = useState<number>(100);
-  const [threshold, setThreshold] = useState<number>(80);
+  const [threshold, setThreshold] = useState<number>(100);
   const [frameSkip, setFrameSkip] = useState<number>(1);
   const [confidence, setConfidence] = useState<number>(70);
   const [motion, setMotion] = useState(true);
@@ -120,9 +120,19 @@ export default function UploadPage() {
               <p className="text-sm text-muted-foreground mt-1">Configure detection parameters</p>
             </CardHeader>
             <CardContent className="space-y-6">
-              <ConfigSlider label="Base Maximum Count" value={baseMax} onChange={setBaseMax} min={10} max={500} step={10} />
-              <ConfigSlider label="Alert Threshold" value={threshold} onChange={setThreshold} min={10} max={100} step={5} />
-              <ConfigSlider label="Frame Skip" value={frameSkip} onChange={setFrameSkip} min={1} max={10} step={1} />
+              <ConfigSlider
+                label="Base Maximum Count"
+                value={baseMax}
+                onChange={(v) => {
+                  setBaseMax(v);
+                  if (threshold < v) setThreshold(v);
+                }}
+                min={10}
+                max={500}
+                step={10}
+              />
+              <ConfigSlider label="Alert Threshold" value={threshold} onChange={setThreshold} min={baseMax} max={700} step={5} />
+              <ConfigSlider label="Frame Skip" value={frameSkip} onChange={setFrameSkip} min={1} max={30} step={1} />
               <ConfigSlider label="Confidence Threshold" value={confidence} onChange={setConfidence} min={10} max={90} step={5} suffix="%" />
               <div className="flex items-center justify-between pt-2 border-t border-orange-200/30">
                 <span className="text-sm font-medium text-foreground">Motion Analysis</span>
@@ -155,9 +165,29 @@ function ConfigSlider({ label, value, onChange, min, max, step, suffix }: { labe
     <div>
       <div className="flex items-center justify-between mb-3 text-sm">
         <span className="font-medium text-foreground">{label}</span>
-        <span className="text-blue-600 font-semibold">{value}{suffix || ""}</span>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            value={value}
+            onChange={(e) => {
+              let val = Number(e.target.value);
+              if (!isNaN(val)) {
+                if (val > max) val = max;
+                onChange(val);
+              }
+            }}
+            onBlur={() => {
+              if (value < min) onChange(min);
+            }}
+            className="w-20 h-8 text-right font-semibold text-blue-600 bg-white"
+            min={min}
+            max={max}
+            step={step}
+          />
+          {suffix && <span className="text-muted-foreground font-semibold">{suffix}</span>}
+        </div>
       </div>
-      <Slider value={[value]} min={min} max={max} step={step} onValueChange={(v) => onChange(v[0])} className="rounded-full" />
+      <Slider value={[value]} min={min} max={max} step={step} onValueChange={(v) => onChange(v[0])} className="rounded-full mt-2" />
     </div>
   );
 }

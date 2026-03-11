@@ -74,9 +74,58 @@ export default function Results() {
     return jobs.find((job) => job.id === selectedJobId) || jobs[0];
   }, [jobs, selectedJobId]);
 
+function formatTime(timestamp: string): string {
+  const num = Number(timestamp);
+  if (!Number.isFinite(num)) return timestamp;
+  const hours = Math.floor(num / 3600);
+  const minutes = Math.floor((num % 3600) / 60);
+  const seconds = Math.floor(num % 60);
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+  const [historicalData, setHistoricalData] = useState<any[] | null>(null);
+
   useEffect(() => {
     setPrediction(null);
-  }, [selectedJobId]);
+    setHistoricalData(null);
+    
+    if (activeJob?.artifacts?.csv) {
+      fetch(activeJob.artifacts.csv)
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch CSV");
+          return res.text();
+        })
+        .then((csvText) => {
+          const lines = csvText.trim().split(/\r?\n/);
+          if (lines.length <= 1) return;
+          
+          const data = [];
+          for (const line of lines.slice(1)) {
+            const parts = line.split(",");
+            if (parts.length < 3) continue;
+            
+            const frame = Number(parts[0]);
+            const timestamp = parts[1];
+            const people = Number(parts[2]);
+            
+            if (!isNaN(frame) && !isNaN(people)) {
+              data.push({
+                frame,
+                actual: people,
+                predicted: people,
+                isFuture: false,
+                time: formatTime(timestamp),
+              });
+            }
+          }
+          setHistoricalData(data);
+        })
+        .catch(console.error);
+    }
+  }, [activeJob]);
 
   const timelineData = useMemo(() => {
     if (prediction) {
@@ -87,6 +136,9 @@ export default function Results() {
         isFuture: point.actualCount === null,
       }));
     }
+    if (historicalData && historicalData.length > 0) {
+      return historicalData;
+    }
     return fallbackTimelineData.map((item, index) => ({
       frame: index,
       actual: item.people,
@@ -94,7 +146,7 @@ export default function Results() {
       isFuture: false,
       time: item.time,
     }));
-  }, [prediction]);
+  }, [prediction, historicalData]);
   const jobStats = activeJob?.stats;
   const predictionStats = prediction?.stats;
   const predictionArtifacts = prediction?.artifacts ?? {
@@ -205,10 +257,14 @@ export default function Results() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <Card className="border-2 border-blue-200/50 bg-gradient-to-br from-blue-50/40 to-cyan-50/40">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Detections</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Average Detections</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-blue-600">{jobStats?.totalDetections?.toLocaleString() ?? "—"}</p>
+            <p className="text-3xl font-bold text-blue-600">
+              {jobStats?.averagePeople 
+                ? Math.round(jobStats.averagePeople).toLocaleString()
+                : "—"}
+            </p>
             <p className="text-xs text-muted-foreground mt-1">{activeJob ? activeJob.sourceName : "No job selected"}</p>
           </CardContent>
         </Card>
