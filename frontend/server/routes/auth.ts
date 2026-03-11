@@ -7,16 +7,6 @@ import { isDBConnected } from "../db/connection.js";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "yolo-crowd-jwt-secret-change-in-production";
 
-// ── Fallback demo user (used when MongoDB is not connected) ──
-const demoUser: UserSummary = {
-  id: "user-1",
-  name: "Admin User",
-  email: "admin@example.com",
-  role: "admin",
-};
-const demoToken = "demo-token-123";
-const demoRefreshToken = "demo-refresh-token-456";
-
 function toUserSummary(doc: InstanceType<typeof User>): UserSummary {
   return {
     id: doc._id.toString(),
@@ -34,56 +24,45 @@ export const handleLogin: RequestHandler<unknown, AuthLoginResponse | { message:
     return res.status(400).json({ message: "Email and password are required" } as any);
   }
 
-  // ── MongoDB-backed auth ──
-  if (isDBConnected()) {
-    try {
-      const user = await User.findOne({ email: email.toLowerCase().trim() });
-      if (!user) {
-        return res.status(401).json({ message: "Invalid credentials" } as any);
-      }
+  if (!isDBConnected()) {
+    return res.status(503).json({ message: "Database not available" } as any);
+  }
 
-      const valid = await user.comparePassword(password);
-      if (!valid) {
-        return res.status(401).json({ message: "Invalid credentials" } as any);
-      }
-
-      const token = jwt.sign({ userId: user._id.toString(), email: user.email }, JWT_SECRET, { expiresIn: "7d" });
-      const refreshToken = jwt.sign({ userId: user._id.toString(), type: "refresh" }, JWT_SECRET, { expiresIn: "30d" });
-
-      // Create session record
-      await Session.create({
-        userId: user._id,
-        token,
-        refreshToken,
-        ipAddress: req.ip,
-        userAgent: req.headers["user-agent"],
-        loginAt: new Date(),
-        isActive: true,
-      });
-
-      const response: AuthLoginResponse = {
-        token,
-        refreshToken,
-        user: toUserSummary(user),
-      };
-      return res.json(response);
-    } catch (error) {
-      console.error("[auth:login] DB error:", error);
-      return res.status(500).json({ message: "Internal server error" } as any);
+  try {
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials" } as any);
     }
-  }
 
-  // ── Fallback: demo mode ──
-  if (email !== demoUser.email || password !== "password") {
-    return res.status(401).json({ message: "Invalid credentials" } as any);
-  }
+    const valid = await user.comparePassword(password);
+    if (!valid) {
+      return res.status(401).json({ message: "Invalid credentials" } as any);
+    }
 
-  const response: AuthLoginResponse = {
-    token: demoToken,
-    refreshToken: demoRefreshToken,
-    user: demoUser,
-  };
-  res.json(response);
+    const token = jwt.sign({ userId: user._id.toString(), email: user.email }, JWT_SECRET, { expiresIn: "7d" });
+    const refreshToken = jwt.sign({ userId: user._id.toString(), type: "refresh" }, JWT_SECRET, { expiresIn: "30d" });
+
+    // Create session record
+    await Session.create({
+      userId: user._id,
+      token,
+      refreshToken,
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"],
+      loginAt: new Date(),
+      isActive: true,
+    });
+
+    const response: AuthLoginResponse = {
+      token,
+      refreshToken,
+      user: toUserSummary(user),
+    };
+    return res.json(response);
+  } catch (error) {
+    console.error("[auth:login] DB error:", error);
+    return res.status(500).json({ message: "Internal server error" } as any);
+  }
 };
 
 export const handleLogout: RequestHandler = async (req, res) => {
@@ -105,33 +84,31 @@ export const handleLogout: RequestHandler = async (req, res) => {
 };
 
 export const handleMe: RequestHandler<unknown, AuthMeResponse | { message: string }> = async (req, res) => {
+  if (!isDBConnected()) {
+    return res.status(503).json({ message: "Database not available" } as any);
+  }
+
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
 
-  // ── MongoDB-backed auth ──
-  if (isDBConnected()) {
-    if (!token) {
-      return res.status(401).json({ message: "No token provided" } as any);
-    }
-
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-      const session = await Session.findOne({ token, isActive: true });
-      if (!session) {
-        return res.status(401).json({ message: "Session expired or invalid" } as any);
-      }
-
-      const user = await User.findById(decoded.userId);
-      if (!user) {
-        return res.status(401).json({ message: "User not found" } as any);
-      }
-
-      return res.json({ user: toUserSummary(user) });
-    } catch (error) {
-      return res.status(401).json({ message: "Invalid token" } as any);
-    }
+  if (!token) {
+    return res.status(401).json({ message: "No token provided" } as any);
   }
 
-  // ── Fallback: demo mode ──
-  res.json({ user: demoUser });
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+    const session = await Session.findOne({ token, isActive: true });
+    if (!session) {
+      return res.status(401).json({ message: "Session expired or invalid" } as any);
+    }
+
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      return res.status(401).json({ message: "User not found" } as any);
+    }
+
+    return res.json({ user: toUserSummary(user) });
+  } catch (error) {
+    return res.status(401).json({ message: "Invalid token" } as any);
+  }
 };

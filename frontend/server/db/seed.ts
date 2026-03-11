@@ -3,6 +3,7 @@ import User, { hashPassword } from "./models/User.js";
 /**
  * Seeds a default admin user if the users collection is empty.
  * Called once on server startup after MongoDB connection is established.
+ * Credentials are read from environment variables.
  */
 export async function seedDefaultAdmin(): Promise<void> {
   const count = await User.countDocuments();

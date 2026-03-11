@@ -29,7 +29,7 @@ The server will start on **http://localhost:8080**
 ### Environment Variables
 Create a `.env` file in the `frontend/` directory (optional):
 ```
-PYTHON_BIN=python3
+PYTHON_BIN=python
 DETECTION_UPLOAD_DIR=./uploads
 PORT=8080
 ```

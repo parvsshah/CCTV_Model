@@ -21,7 +21,7 @@ export function createServer() {
   connectDB()
     .then(() => seedDefaultAdmin())
     .catch((err) => {
-      console.warn("[Server] MongoDB connection failed — running in demo mode:", err.message);
+      console.warn("[Server] MongoDB connection failed:", err.message);
     });
 
   // Example API routes

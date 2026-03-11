@@ -43,6 +43,9 @@ thop  # FLOPS computation
 pycocotools>=2.0  # COCO mAP
 psutil  # System monitoring
 
+# database ----------------------------------
+pymongo>=4.0  # MongoDB driver for Python
+
 # development -------------------------------
 pytest>=6.0  # For testing
 black  # Code formatting

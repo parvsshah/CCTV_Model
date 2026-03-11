@@ -190,12 +190,36 @@ export default function Dashboard() {
                     <TableRow key={j.id} className="border-slate-200 hover:bg-blue-50/50">
                       <TableCell className="font-medium text-foreground">{j.name}</TableCell>
                       <TableCell>
-                        <span className={"text-xs px-2.5 py-1 rounded-full font-medium " + (j.status === "completed" ? "bg-green-100 text-green-700" : j.status === "processing" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-700")}>{j.status}</span>
+                        <span className={"text-xs px-2.5 py-1 rounded-full font-medium " + (j.status === "completed" ? "bg-green-100 text-green-700" : j.status === "processing" ? "bg-amber-100 text-amber-700" : j.status === "failed" ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-700")}>{j.status}</span>
                       </TableCell>
                       <TableCell className="text-foreground">{j.maxPeople}</TableCell>
                       <TableCell className="text-foreground">{formatDuration(j.durationSeconds)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
+                          {j.status === "processing" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={async () => {
+                                if (!confirm(`Are you sure you want to terminate job "${j.name}"?`)) return;
+                                try {
+                                  const res = await fetch(`/api/detection/jobs/${j.id}/terminate`, { method: "POST" });
+                                  if (res.ok) {
+                                    toast({ title: "Job terminated", description: `Job "${j.name}" has been stopped.` });
+                                  } else {
+                                    const err = await res.json();
+                                    toast({ variant: "destructive", title: "Failed to terminate", description: err.message || "Unknown error" });
+                                  }
+                                } catch (error) {
+                                  toast({ variant: "destructive", title: "Error", description: "Failed to terminate job. Please try again." });
+                                }
+                              }}
+                            >
+                              <X className="h-4 w-4 mr-1" />
+                              Terminate
+                            </Button>
+                          )}
                           {j.status === "completed" && j.videoUrl && (
                             <Button
                               size="sm"
