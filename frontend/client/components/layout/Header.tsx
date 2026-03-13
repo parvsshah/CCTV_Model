@@ -7,7 +7,7 @@ export function Header() {
   const { user, logout, status } = useAuth();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200/50 bg-white/95 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
       <div className="container flex h-14 items-center justify-between">
         <Link to="/" className="font-bold tracking-tight text-lg text-foreground">
           Weaverly

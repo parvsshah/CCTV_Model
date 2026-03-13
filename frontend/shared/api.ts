@@ -173,6 +173,10 @@ export type TimeRange = "30min" | "1hour" | "2hours" | "3hours" | "5hours";
 export interface UserPreferences {
   detectionViewMode: DetectionViewMode;
   timeRange: TimeRange;
+  theme: "light" | "dark" | "system";
+  defaultMaxCapacity: number;
+  defaultAlertThreshold: number;
+  defaultConfidenceLevel: number;
 }
 
 // Dashboard stats request with time filtering

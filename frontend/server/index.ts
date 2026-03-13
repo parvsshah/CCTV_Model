@@ -5,6 +5,7 @@ import { handleDemo } from "./routes/demo";
 import { handleLogin, handleLogout, handleMe, handleRegister, authRouter } from "./routes/auth";
 import detectionRouter from "./routes/detection";
 import dashboardRouter from "./routes/dashboard";
+import userRouter from "./routes/user";
 import passport from "passport";
 import { detectionPaths } from "./jobs/detection-jobs";
 import { connectDB } from "./db/connection";
@@ -46,6 +47,7 @@ export function createServer() {
   app.use(dashboardRouter);
   app.use(detectionRouter);
   app.use(authRouter);
+  app.use(userRouter);
 
   return app;
 }

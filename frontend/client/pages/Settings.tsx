@@ -15,17 +15,22 @@ import { useToast } from "@/hooks/use-toast";
 export default function Settings() {
   const { toast } = useToast();
 
-  // Existing settings
+  // Settings state
   const [notifications, setNotifications] = useState(true);
   const [emailAlerts, setEmailAlerts] = useState(false);
   const [alertThreshold, setAlertThreshold] = useState(80);
-  const [theme, setTheme] = useState("light");
+  const [theme, setTheme] = useState<"light" | "dark" | "system">("light");
   const [apiKey, setApiKey] = useState("sk_live_••••••••••••••••••••••••");
   const [showApiKey, setShowApiKey] = useState(false);
 
   // Detection preferences
   const [detectionViewMode, setDetectionViewMode] = useState<DetectionViewMode>("average");
   const [timeRange, setTimeRange] = useState<TimeRange>("2hours");
+  
+  // Detection defaults
+  const [defaultMaxCapacity, setDefaultMaxCapacity] = useState(100);
+  const [defaultAlertThreshold, setDefaultAlertThreshold] = useState(80);
+  const [defaultConfidenceLevel, setDefaultConfidenceLevel] = useState(70);
 
   // Load preferences from localStorage on mount
   useEffect(() => {
@@ -35,6 +40,10 @@ export default function Settings() {
         const prefs: UserPreferences = JSON.parse(saved);
         setDetectionViewMode(prefs.detectionViewMode);
         setTimeRange(prefs.timeRange);
+        if (prefs.theme) setTheme(prefs.theme as any);
+        if (prefs.defaultMaxCapacity) setDefaultMaxCapacity(prefs.defaultMaxCapacity);
+        if (prefs.defaultAlertThreshold) setDefaultAlertThreshold(prefs.defaultAlertThreshold);
+        if (prefs.defaultConfidenceLevel) setDefaultConfidenceLevel(prefs.defaultConfidenceLevel);
       }
     } catch (error) {
       console.error("Failed to load preferences:", error);
@@ -43,12 +52,23 @@ export default function Settings() {
 
   const handleSave = () => {
     try {
-      // Save detection preferences to localStorage
+      // Save preferences to localStorage
       const preferences: UserPreferences = {
         detectionViewMode,
         timeRange,
+        theme,
+        defaultMaxCapacity,
+        defaultAlertThreshold,
+        defaultConfidenceLevel,
       };
       localStorage.setItem("crowdDetectionPreferences", JSON.stringify(preferences));
+
+      // Apply theme immediately
+      if (theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
 
       toast({
         title: "Settings saved",
@@ -61,6 +81,43 @@ export default function Settings() {
         description: "Could not save your preferences. Please try again.",
       });
     }
+  };
+
+  const handlePhotoUpload = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append("photo", file);
+
+      try {
+        const response = await fetch("/api/user/profile-photo", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (response.ok) {
+          toast({
+            title: "Photo updated",
+            description: "Your profile photo has been updated successfully.",
+          });
+          // Optionally refresh profile data here
+        } else {
+          throw new Error("Failed to upload");
+        }
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "Upload failed",
+          description: "Could not upload your profile photo. Please try again.",
+        });
+      }
+    };
+    input.click();
   };
 
   return (
@@ -177,14 +234,14 @@ export default function Settings() {
             <CardContent className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-3">Theme</label>
-                <Select value={theme} onValueChange={setTheme}>
+                <Select value={theme} onValueChange={(v) => setTheme(v as any)}>
                   <SelectTrigger className="border-slate-200/50 rounded-lg">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="light">Light</SelectItem>
                     <SelectItem value="dark">Dark</SelectItem>
-                    <SelectItem value="auto">Auto (System)</SelectItem>
+                    <SelectItem value="system">Auto (System)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -198,15 +255,15 @@ export default function Settings() {
             <CardContent className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Default Maximum Capacity</label>
-                <Input type="number" placeholder="100" defaultValue="100" className="border-slate-200/50 rounded-lg" />
+                <Input type="number" value={defaultMaxCapacity} onChange={(e) => setDefaultMaxCapacity(Number(e.target.value))} className="border-slate-200/50 rounded-lg" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Default Alert Threshold</label>
-                <Input type="number" placeholder="80" defaultValue="80" className="border-slate-200/50 rounded-lg" />
+                <Input type="number" value={defaultAlertThreshold} onChange={(e) => setDefaultAlertThreshold(Number(e.target.value))} className="border-slate-200/50 rounded-lg" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Default Confidence Level</label>
-                <Input type="number" placeholder="70" defaultValue="70" className="border-slate-200/50 rounded-lg" />
+                <Input type="number" value={defaultConfidenceLevel} onChange={(e) => setDefaultConfidenceLevel(Number(e.target.value))} className="border-slate-200/50 rounded-lg" />
               </div>
             </CardContent>
           </Card>
@@ -223,7 +280,7 @@ export default function Settings() {
                     type={showApiKey ? "text" : "password"}
                     value={apiKey}
                     readOnly
-                    className="border-slate-200/50 rounded-lg bg-slate-50"
+                    className="border-slate-200/50 rounded-lg bg-slate-50 dark:bg-slate-900"
                   />
                   <Button
                     variant="outline"
@@ -252,6 +309,16 @@ export default function Settings() {
               <CardTitle className="text-lg">Profile</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex flex-col items-center mb-4">
+                 <div className="h-24 w-24 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden border-2 border-orange-200 mb-4">
+                    <img src="/api/user/profile-photo" alt="Profile" className="h-full w-full object-cover" onError={(e) => {
+                      (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=User&background=random`;
+                    }} />
+                 </div>
+                 <Button onClick={handlePhotoUpload} variant="outline" size="sm" className="rounded-lg">
+                    Upload Photo
+                 </Button>
+              </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Email Address</p>
                 <p className="font-medium text-foreground">user@example.com</p>
@@ -285,19 +352,14 @@ export default function Settings() {
             </CardContent>
           </Card>
 
-          <Card className="border-2 border-slate-200/50">
-            <CardHeader>
-              <CardTitle className="text-lg">Danger Zone</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Button className="w-full border-red-200/50 rounded-lg text-red-600 hover:bg-red-50" variant="outline">
-                <LogOut className="h-4 w-4 mr-2" /> Sign Out
-              </Button>
-              <Button className="w-full border-red-200/50 rounded-lg text-red-600 hover:bg-red-50" variant="outline">
-                Delete Account
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="space-y-3 pt-2">
+            <Button className="w-full border-red-200/50 rounded-lg text-red-600 hover:bg-red-50" variant="outline">
+              <LogOut className="h-4 w-4 mr-2" /> Sign Out
+            </Button>
+            <Button className="w-full border-red-200/50 rounded-lg text-red-600 hover:bg-red-50" variant="outline">
+              Delete Account
+            </Button>
+          </div>
         </div>
       </div>
 

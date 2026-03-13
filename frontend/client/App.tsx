@@ -20,29 +20,49 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // const queryClient = new QueryClient();
 
-const App = () => (
-  <ErrorBoundary>
-    <AuthProvider>
-      <Toaster />
-      {/* <Sonner /> */}
-      <BrowserRouter>
-        <Routes>
-          <Route element={<ProtectedRoute />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/upload" element={<Upload />} />
-            <Route path="/results" element={<Results />} />
-            <Route path="/live" element={<Live />} />
-            <Route path="/settings" element={<Settings />} />
-          </Route>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
-  </ErrorBoundary>
-);
+import { useEffect, useState } from "react";
+
+const App = () => {
+  useEffect(() => {
+    const saved = localStorage.getItem("crowdDetectionPreferences");
+    if (saved) {
+      try {
+        const prefs = JSON.parse(saved);
+        if (prefs.theme === "dark" || (prefs.theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+      } catch (e) {
+        console.error("Failed to parse preferences for theme", e);
+      }
+    }
+  }, []);
+
+  return (
+    <ErrorBoundary>
+      <AuthProvider>
+        <Toaster />
+        {/* <Sonner /> */}
+        <BrowserRouter>
+          <Routes>
+            <Route element={<ProtectedRoute />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/upload" element={<Upload />} />
+              <Route path="/results" element={<Results />} />
+              <Route path="/live" element={<Live />} />
+              <Route path="/settings" element={<Settings />} />
+            </Route>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ErrorBoundary>
+  );
+};
 
 const container = document.getElementById("root");
 if (!container) throw new Error("Root container #root not found");
