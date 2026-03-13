@@ -60,6 +60,14 @@ export interface AlertSummary {
   peopleCount: number;
   triggeredAt: string;
   zone?: string;
+  jobId: string;
+  jobName: string;
+  sourceType: string;
+  threshold: number;
+  frameUrl?: string;
+  maxPeople: number;
+  avgPeople: number;
+  duration: string;
 }
 
 export interface DashboardStatsResponse {

@@ -525,6 +525,7 @@ async function watchProcess(job: DetectionJobInternal) {
     // Persist completion to MongoDB
     await updateJobInDB(job);
     await persistAlertsForJob(job);
+    await persistDetectionResultToDB(job);
 
   } catch (error) {
     // Handle any errors in the process
@@ -1000,6 +1001,26 @@ async function persistResultToDB(jobId: string, csvPath: string | undefined, sta
     const dbJob = await JobModel.findOne({ jobId });
     if (!dbJob) return;
 
+    // Try to find existing detection result for this job and update it with prediction data
+    const existing = await ResultModel.findOne({ jobId: dbJob._id });
+    if (existing) {
+      await ResultModel.findByIdAndUpdate(existing._id, {
+        csvFileId: csvPath || existing.csvFileId,
+        predictedCount: stats?.futureSteps,
+        predictionStats: stats ? {
+          mae: stats.mae,
+          rmse: stats.rmse,
+          historicalPoints: stats.historicalPoints,
+          futureSteps: stats.futureSteps,
+        } : undefined,
+        plotPath,
+        generatedAt: new Date(),
+      });
+      console.log(`[MongoDB] Result updated with prediction data for job ${jobId}`);
+      return;
+    }
+
+    // No existing result — create new one (shouldn't happen if detection ran first)
     await ResultModel.create({
       jobId: dbJob._id,
       csvFileId: csvPath,
@@ -1016,6 +1037,41 @@ async function persistResultToDB(jobId: string, csvPath: string | undefined, sta
     console.log(`[MongoDB] Result persisted for job ${jobId}`);
   } catch (error) {
     console.error(`[MongoDB] Failed to persist result for job ${jobId}:`, error);
+  }
+}
+
+async function persistDetectionResultToDB(job: DetectionJobInternal) {
+  if (!isDBConnected()) return;
+  if (!job.artifacts?.csv && !job.stats) return;
+
+  try {
+    const dbJob = await JobModel.findOne({ jobId: job.id });
+    if (!dbJob) return;
+
+    // Check if a result already exists for this job
+    const existing = await ResultModel.findOne({ jobId: dbJob._id });
+    if (existing) {
+      // Update existing result with detection data (keep predictedCount null if not set)
+      await ResultModel.findByIdAndUpdate(existing._id, {
+        csvFileId: job.artifacts?.csv,
+        generatedAt: new Date(),
+      });
+      console.log(`[MongoDB] Detection result updated for job ${job.id}`);
+      return;
+    }
+
+    // Create new result with predictedCount as null (prediction hasn't run yet)
+    await ResultModel.create({
+      jobId: dbJob._id,
+      csvFileId: job.artifacts?.csv,
+      predictedCount: null,
+      predictionStats: undefined,
+      plotPath: undefined,
+      generatedAt: new Date(),
+    });
+    console.log(`[MongoDB] Detection result persisted for job ${job.id} (predictedCount: null)`);
+  } catch (error) {
+    console.error(`[MongoDB] Failed to persist detection result for job ${job.id}:`, error);
   }
 }
 

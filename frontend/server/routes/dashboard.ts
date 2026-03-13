@@ -89,11 +89,23 @@ function deriveAlertsFromJobs(jobs: ReturnType<typeof listDetectionJobs>): Alert
   const now = new Date();
   for (const job of jobs) {
     if (job.status !== "completed" || !job.stats) continue;
-    const { maxPeople, currentMax } = job.stats;
+    const { maxPeople, currentMax, averagePeople } = job.stats;
     const threshold = job.config.baseMax * (job.config.confidence / 100);
     if (maxPeople >= threshold * 0.8) {
       const level: "low" | "medium" | "high" =
         maxPeople >= threshold * 0.95 ? "high" : maxPeople >= threshold * 0.85 ? "medium" : "low";
+
+      // Pick the first alert frame image if available
+      const frameUrl = job.artifacts?.alerts?.[0] || undefined;
+
+      // Compute duration
+      const startMs = new Date(job.createdAt).getTime();
+      const endMs = new Date(job.updatedAt).getTime();
+      const durationSecs = Math.max(0, Math.floor((endMs - startMs) / 1000));
+      const mins = Math.floor(durationSecs / 60);
+      const secs = durationSecs % 60;
+      const duration = `${mins}:${String(secs).padStart(2, "0")}`;
+
       alerts.push({
         id: `alert-${job.id}`,
         level,
@@ -106,6 +118,14 @@ function deriveAlertsFromJobs(jobs: ReturnType<typeof listDetectionJobs>): Alert
         peopleCount: maxPeople,
         triggeredAt: job.updatedAt,
         zone: job.sourceName,
+        jobId: job.id,
+        jobName: job.sourceName,
+        sourceType: job.sourceType,
+        threshold: Math.round(threshold),
+        frameUrl,
+        maxPeople,
+        avgPeople: averagePeople,
+        duration,
       });
     }
   }

@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [videoModalOpen, setVideoModalOpen] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<{ url: string; name: string } | null>(null);
+  const [selectedAlert, setSelectedAlert] = useState<AlertSummary | null>(null);
   const { toast } = useToast();
 
   // Load user preferences
@@ -150,14 +151,22 @@ export default function Dashboard() {
           <CardContent>
             <div className="space-y-2.5">
               {data.alerts.map((a) => (
-                <div key={a.id} className={cnByLevel(a.level, "flex items-center justify-between rounded-lg border p-3 text-sm")}>
+                <div
+                  key={a.id}
+                  className={cnByLevel(a.level, "flex items-center justify-between rounded-lg border p-3 text-sm cursor-pointer transition-colors hover:opacity-80")}
+                  onClick={() => setSelectedAlert(a)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === "Enter" && setSelectedAlert(a)}
+                >
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <AlertTriangle className={cnByLevel(a.level, "h-4 w-4 flex-shrink-0", true)} />
                     <div className="min-w-0">
                       <p className="font-medium text-foreground">{a.message}</p>
-                      <p className="text-xs text-muted-foreground">{new Date(a.triggeredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} • {a.peopleCount}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(a.triggeredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} • {a.peopleCount} people</p>
                     </div>
                   </div>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0 ml-2" />
                 </div>
               ))}
               {data.alerts.length === 0 && (
@@ -275,6 +284,87 @@ export default function Dashboard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Alert Detail Dialog */}
+      <Dialog open={!!selectedAlert} onOpenChange={(open) => { if (!open) setSelectedAlert(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className={selectedAlert ? cnByLevel(selectedAlert.level, "h-5 w-5", true) : "h-5 w-5"} />
+              {selectedAlert?.message}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedAlert && (
+            <div className="space-y-4">
+              {/* Alert frame image */}
+              {selectedAlert.frameUrl ? (
+                <div className="space-y-1">
+                  <div className="rounded-lg overflow-hidden border bg-slate-900">
+                    <img
+                      src={selectedAlert.frameUrl}
+                      alt={`Alert frame — ${selectedAlert.message}`}
+                      className="w-full h-auto max-h-72 object-contain"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground text-center">
+                    Frame captured at {new Date(selectedAlert.triggeredAt).toLocaleString()}
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-lg border bg-slate-50 flex items-center justify-center h-40">
+                  <p className="text-sm text-muted-foreground">No alert frame available</p>
+                </div>
+              )}
+
+              {/* Alert level badge */}
+              <div className="flex items-center gap-2">
+                <span className={"text-xs uppercase font-bold px-2 py-1 rounded " + (selectedAlert.level === "high" ? "bg-red-200 text-red-800" : selectedAlert.level === "medium" ? "bg-amber-200 text-amber-800" : "bg-blue-200 text-blue-800")}>{selectedAlert.level} priority</span>
+                <span className="text-xs text-muted-foreground">{new Date(selectedAlert.triggeredAt).toLocaleString()}</span>
+              </div>
+
+              {/* Job info grid */}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="space-y-0.5">
+                  <p className="text-muted-foreground text-xs">Job Name</p>
+                  <p className="font-medium">{selectedAlert.jobName}</p>
+                </div>
+                <div className="space-y-0.5">
+                  <p className="text-muted-foreground text-xs">Source Type</p>
+                  <p className="font-medium capitalize">{selectedAlert.sourceType}</p>
+                </div>
+                <div className="space-y-0.5">
+                  <p className="text-muted-foreground text-xs">People Detected</p>
+                  <p className="font-medium">{selectedAlert.peopleCount} / {selectedAlert.threshold} max</p>
+                </div>
+                <div className="space-y-0.5">
+                  <p className="text-muted-foreground text-xs">Avg People</p>
+                  <p className="font-medium">{selectedAlert.avgPeople.toFixed(1)}</p>
+                </div>
+                <div className="space-y-0.5">
+                  <p className="text-muted-foreground text-xs">Duration</p>
+                  <p className="font-medium">{selectedAlert.duration}</p>
+                </div>
+                <div className="space-y-0.5">
+                  <p className="text-muted-foreground text-xs">Zone</p>
+                  <p className="font-medium">{selectedAlert.zone || "—"}</p>
+                </div>
+                <div className="col-span-2 space-y-0.5">
+                  <p className="text-muted-foreground text-xs">Triggered At</p>
+                  <p className="font-medium">{new Date(selectedAlert.triggeredAt).toLocaleString([], { dateStyle: "medium", timeStyle: "medium" })}</p>
+                </div>
+              </div>
+
+              {/* Link to job results */}
+              <Button asChild className="w-full">
+                <Link to={`/results?jobId=${selectedAlert.jobId}`}>
+                  View Full Job Results <ArrowRight className="h-4 w-4 ml-1" />
+                </Link>
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
     </AppLayout>
   );
 }

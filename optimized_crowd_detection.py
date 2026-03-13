@@ -498,6 +498,18 @@ def detect(save_img=False):
                     if frame_count == 1:
                         print(f"Warning: Could not save stream frame: {e}")
 
+            # Auto-save alert frame when crowd level is HIGH (red)
+            if crowd_level == 'red':
+                existing_alerts = list(alert_dir.glob(f"{base_filename}*.jpg"))
+                if len(existing_alerts) < 20:  # Cap at 20 alert frames per job
+                    alert_save_path = alert_dir / f"{base_filename}_frame{frame_count:05d}.jpg"
+                    try:
+                        cv2.imwrite(str(alert_save_path), im0, [cv2.IMWRITE_JPEG_QUALITY, 90])
+                        if len(existing_alerts) == 0:
+                            print(f"\n[ALERT] HIGH crowd density! Saved alert frame to {alert_save_path}")
+                    except Exception as e:
+                        print(f"Warning: Could not save alert frame: {e}")
+
             # Save results
             if save_img:
                 if dataset.mode == 'image':
