@@ -70,6 +70,75 @@ export interface CreateDetectionJobInput {
   notes?: string;
 }
 
+// ── In-Memory Live Buffer ──
+
+interface LiveDataEntry {
+  frameId: number;
+  timestamp: number;
+  count: number;
+  level: string;       // 'green' | 'yellow' | 'red'
+  densityName: string; // 'LOW' | 'MODERATE' | 'HIGH'
+  currentMax: number;
+  threshold30: number;
+  threshold60: number;
+}
+
+interface LiveAlert {
+  id: string;
+  frameId: number;
+  time: string;
+  zone: string;
+  type: string;    // 'surge' | 'rising' | 'normal'
+  message: string;
+}
+
+class LiveBuffer {
+  private entries: LiveDataEntry[] = [];
+  private readonly capacity: number;
+  public alerts: LiveAlert[] = [];
+  private alertCount = 0;
+  private readonly maxAlerts = 20;
+
+  constructor(capacity = 200) {
+    this.capacity = capacity;
+  }
+
+  push(entry: LiveDataEntry) {
+    this.entries.push(entry);
+    if (this.entries.length > this.capacity) {
+      this.entries.shift();
+    }
+  }
+
+  /** Get the latest N entries (default: all in buffer) */
+  getRecent(n?: number): LiveDataEntry[] {
+    if (!n) return [...this.entries];
+    return this.entries.slice(-n);
+  }
+
+  /** Get the latest entry */
+  getLatest(): LiveDataEntry | undefined {
+    return this.entries[this.entries.length - 1];
+  }
+
+  /** Get the total number of entries pushed (including evicted) */
+  get size(): number {
+    return this.entries.length;
+  }
+
+  addAlert(alert: LiveAlert) {
+    if (this.alertCount >= this.maxAlerts) return;
+    this.alerts.push(alert);
+    this.alertCount++;
+    // Keep only last 50 alerts in memory
+    if (this.alerts.length > 50) {
+      this.alerts = this.alerts.slice(-50);
+    }
+  }
+}
+
+const liveBuffers = new Map<string, LiveBuffer>();
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const frontendRoot = path.resolve(__dirname, "..", "..");
@@ -499,8 +568,24 @@ async function watchProcess(job: DetectionJobInternal) {
     console.log(`[JOB ${job.id}] Command: ${pythonBin} ${args.join(' ')}`);
     console.log(`[JOB ${job.id}] Working directory: ${cwd}`);
 
+    // Create live buffer for real-time dashboard updates
+    liveBuffers.set(job.id, new LiveBuffer());
+
+    // Start periodic artifact collection (every 5s) so CSV/stats are available mid-processing
+    const artifactTimer = setInterval(async () => {
+      try {
+        await collectArtifacts(job);
+        jobs.set(job.id, job);
+      } catch (e) {
+        // Non-fatal: artifact collection failure shouldn't stop processing
+      }
+    }, 5000);
+
     // Run the Python script with our enhanced process handler
     await runPythonProcess(args, cwd, job);
+
+    // Stop periodic artifact collection
+    clearInterval(artifactTimer);
 
     // If we get here, processing completed successfully
     job.status = 'completed' as DetectionJobStatus;
@@ -551,6 +636,11 @@ async function watchProcess(job: DetectionJobInternal) {
   } finally {
     // Ensure job is updated in the jobs map
     jobs.set(job.id, job);
+    // Note: don't delete liveBuffers here — keep for a grace period so the
+    // frontend can fetch the final state. Clean up after 60s.
+    setTimeout(() => {
+      liveBuffers.delete(job.id);
+    }, 60_000);
   }
 }
 
@@ -626,6 +716,38 @@ export async function createDetectionJob(
 export function getDetectionJob(id: string) {
   const job = jobs.get(id);
   return job ? serializeJob(job) : undefined;
+}
+
+export function getLiveData(jobId: string) {
+  const buffer = liveBuffers.get(jobId);
+  const job = jobs.get(jobId);
+  if (!buffer || !job) return null;
+
+  const recent = buffer.getRecent(30); // Last 30 data points for chart
+  const latest = buffer.getLatest();
+
+  const chartData = recent.map((e) => {
+    const minutes = Math.floor(e.timestamp / 60);
+    const seconds = Math.floor(e.timestamp % 60);
+    return {
+      time: `${minutes}:${String(seconds).padStart(2, "0")}`,
+      count: e.count,
+      frameId: e.frameId,
+    };
+  });
+
+  return {
+    jobId,
+    status: job.status,
+    currentCount: latest?.count ?? 0,
+    crowdLevel: latest?.densityName ?? "LOW",
+    currentMax: latest?.currentMax ?? 0,
+    threshold30: latest?.threshold30 ?? 0,
+    threshold60: latest?.threshold60 ?? 0,
+    chartData,
+    alerts: buffer.alerts.slice(-10), // Last 10 alerts
+    totalFrames: buffer.size,
+  };
 }
 
 export function listDetectionJobs() {
@@ -771,6 +893,57 @@ async function runPythonProcess(args: string[], cwd: string, job: DetectionJobIn
       stdout += text + '\n';
       const lines = text.split('\n').filter(Boolean);
       lines.forEach(line => {
+        // Parse [DATA] lines into the live buffer
+        if (line.startsWith('[DATA]')) {
+          try {
+            const jsonStr = line.substring(6); // Remove '[DATA]' prefix
+            const d = JSON.parse(jsonStr);
+            const buffer = liveBuffers.get(jobId);
+            if (buffer) {
+              const entry: LiveDataEntry = {
+                frameId: d.f,
+                timestamp: d.t,
+                count: d.c,
+                level: d.l,
+                densityName: d.d,
+                currentMax: d.m,
+                threshold30: d.t30,
+                threshold60: d.t60,
+              };
+              buffer.push(entry);
+
+              // Real-time alert generation on HIGH density
+              if (d.d === 'HIGH') {
+                const minutes = Math.floor(d.t / 60);
+                const seconds = Math.floor(d.t % 60);
+                const timeStr = `${minutes}:${String(seconds).padStart(2, '0')}`;
+                buffer.addAlert({
+                  id: `alert-${jobId}-${d.f}`,
+                  frameId: d.f,
+                  time: timeStr,
+                  zone: typeof job !== 'string' ? job.sourceName : 'Stream',
+                  type: 'surge',
+                  message: `Crowd surge: ${d.c} people detected (frame ${d.f})`,
+                });
+              } else if (d.d === 'MODERATE' && d.c > d.m * 0.5) {
+                const minutes = Math.floor(d.t / 60);
+                const seconds = Math.floor(d.t % 60);
+                const timeStr = `${minutes}:${String(seconds).padStart(2, '0')}`;
+                buffer.addAlert({
+                  id: `alert-${jobId}-${d.f}`,
+                  frameId: d.f,
+                  time: timeStr,
+                  zone: typeof job !== 'string' ? job.sourceName : 'Stream',
+                  type: 'rising',
+                  message: `Density rising: ${d.c} people detected (frame ${d.f})`,
+                });
+              }
+            }
+          } catch (e) {
+            // Ignore malformed [DATA] lines
+          }
+          return; // Don't log [DATA] lines to console
+        }
         console.log(`[JOB ${jobId || 'unknown'}] ${line}`);
       });
     });

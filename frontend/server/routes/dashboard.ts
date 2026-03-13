@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { DashboardStatsResponse, DetectionJob, AlertSummary, TimeRange } from "@shared/api";
-import { listDetectionJobs } from "../jobs/detection-jobs";
+import { listDetectionJobs, getLiveData } from "../jobs/detection-jobs";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -86,7 +86,8 @@ function formatTime(timestamp: string): string {
 
 function deriveAlertsFromJobs(jobs: ReturnType<typeof listDetectionJobs>): AlertSummary[] {
   const alerts: AlertSummary[] = [];
-  const now = new Date();
+
+  // Alerts from completed jobs
   for (const job of jobs) {
     if (job.status !== "completed" || !job.stats) continue;
     const { maxPeople, currentMax, averagePeople } = job.stats;
@@ -95,10 +96,8 @@ function deriveAlertsFromJobs(jobs: ReturnType<typeof listDetectionJobs>): Alert
       const level: "low" | "medium" | "high" =
         maxPeople >= threshold * 0.95 ? "high" : maxPeople >= threshold * 0.85 ? "medium" : "low";
 
-      // Pick the first alert frame image if available
       const frameUrl = job.artifacts?.alerts?.[0] || undefined;
 
-      // Compute duration
       const startMs = new Date(job.createdAt).getTime();
       const endMs = new Date(job.updatedAt).getTime();
       const durationSecs = Math.max(0, Math.floor((endMs - startMs) / 1000));
@@ -129,6 +128,36 @@ function deriveAlertsFromJobs(jobs: ReturnType<typeof listDetectionJobs>): Alert
       });
     }
   }
+
+  // Live alerts from running jobs (from in-memory buffer)
+  for (const job of jobs) {
+    if (job.status !== "running") continue;
+    const liveData = getLiveData(job.id);
+    if (!liveData || !liveData.alerts || liveData.alerts.length === 0) continue;
+
+    for (const liveAlert of liveData.alerts) {
+      const level: "low" | "medium" | "high" =
+        liveAlert.type === "surge" ? "high" : liveAlert.type === "rising" ? "medium" : "low";
+
+      alerts.push({
+        id: liveAlert.id,
+        level,
+        message: liveAlert.message,
+        peopleCount: liveData.currentCount,
+        triggeredAt: new Date().toISOString(),
+        zone: liveAlert.zone || job.sourceName,
+        jobId: job.id,
+        jobName: job.sourceName,
+        sourceType: job.sourceType,
+        threshold: liveData.currentMax,
+        frameUrl: undefined,
+        maxPeople: liveData.currentMax,
+        avgPeople: liveData.currentCount,
+        duration: "live",
+      });
+    }
+  }
+
   return alerts
     .sort((a, b) => new Date(b.triggeredAt).getTime() - new Date(a.triggeredAt).getTime())
     .slice(0, 10);

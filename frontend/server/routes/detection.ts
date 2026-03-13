@@ -15,6 +15,7 @@ import {
   createDetectionJob,
   detectionPaths,
   getDetectionJob,
+  getLiveData,
   listDetectionJobs,
   runPredictionForJob,
 } from "../jobs/detection-jobs";
@@ -162,11 +163,11 @@ router.get("/api/detection/jobs", (_req, res) => {
   res.json(response);
 });
 
-// Get only stream jobs (for Live page)
+// Get running jobs (for Live page — includes all types, not just streams)
 router.get("/api/detection/jobs/streams", (_req, res) => {
   const allJobs = listDetectionJobs();
-  const streamJobs = allJobs.filter(job => job.sourceType === "stream");
-  const response: DetectionJobListResponse = { jobs: streamJobs };
+  const liveJobs = allJobs.filter(job => job.status === "running" || job.status === "queued");
+  const response: DetectionJobListResponse = { jobs: liveJobs };
   res.json(response);
 });
 
@@ -190,6 +191,21 @@ router.post("/api/detection/jobs/:id/predict", async (req, res) => {
     const message = error instanceof Error ? error.message : "Failed to generate prediction";
     res.status(400).json({ message });
   }
+});
+
+// Get real-time live data from in-memory buffer
+router.get("/api/detection/jobs/:id/live-data", (req, res) => {
+  const jobId = req.params.id;
+  const data = getLiveData(jobId);
+
+  if (!data) {
+    return res.status(404).json({ message: "No live data available for this job" });
+  }
+
+  // No cache for live data
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.json(data);
 });
 
 // Serve live stream frames

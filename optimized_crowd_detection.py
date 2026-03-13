@@ -2,6 +2,7 @@
 import argparse
 import time
 import sys
+import json
 from pathlib import Path
 
 import cv2
@@ -449,6 +450,19 @@ def detect(save_img=False):
                 thresholds['green_max'],
                 thresholds['yellow_max']
             ])
+            
+            # Emit structured data line for real-time Node.js buffer
+            data_line = json.dumps({
+                "f": frame_count,
+                "t": round(timestamp_val, 3),
+                "c": n_people,
+                "l": crowd_level,
+                "d": density_name,
+                "m": color_mapper.current_max,
+                "t30": thresholds['green_max'],
+                "t60": thresholds['yellow_max']
+            })
+            print(f"[DATA]{data_line}", flush=True)
             
             # Print progress every 10 frames
             if frame_count % 10 == 0:

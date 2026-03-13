@@ -279,11 +279,20 @@ function formatTime(timestamp: string): string {
         </Card>
         <Card className="border-2 border-green-200/50 bg-gradient-to-br from-green-50/40 to-emerald-50/40">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Prediction MAE</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Prediction Count</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-green-600">{predictionStats ? predictionStats.mae : "—"}</p>
-            <p className="text-xs text-muted-foreground mt-1">{predictionStats ? "historical error" : "run prediction to view"}</p>
+            <p className="text-3xl font-bold text-green-600">
+              {prediction
+                ? (() => {
+                    const futurePredictions = prediction.predictions.filter(p => p.actualCount === null);
+                    if (futurePredictions.length === 0) return "—";
+                    const avg = futurePredictions.reduce((sum, p) => sum + (p.predictedCount ?? 0), 0) / futurePredictions.length;
+                    return Math.round(avg).toLocaleString();
+                  })()
+                : "—"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">{prediction ? "avg predicted people" : "run prediction to view"}</p>
           </CardContent>
         </Card>
         <Card className="border-2 border-purple-200/50 bg-gradient-to-br from-purple-50/40 to-pink-50/40">
