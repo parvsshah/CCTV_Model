@@ -14,9 +14,17 @@ export interface DemoResponse {
 export interface UserSummary {
   id: string;
   name: string;
+  username: string;
   email: string;
   role: "admin" | "analyst" | "viewer";
   avatarUrl?: string;
+}
+
+export interface AuthRegisterRequest {
+  name: string;
+  username: string;
+  email: string;
+  password?: string;
 }
 
 export interface AuthLoginRequest {

@@ -2,9 +2,10 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { handleDemo } from "./routes/demo";
-import { handleLogin, handleLogout, handleMe } from "./routes/auth";
+import { handleLogin, handleLogout, handleMe, handleRegister, authRouter } from "./routes/auth";
 import detectionRouter from "./routes/detection";
 import dashboardRouter from "./routes/dashboard";
+import passport from "passport";
 import { detectionPaths } from "./jobs/detection-jobs";
 import { connectDB } from "./db/connection";
 import { seedDefaultAdmin } from "./db/seed";
@@ -34,12 +35,17 @@ export function createServer() {
 
   app.use("/runs", express.static(detectionPaths.runsDir, { fallthrough: true }));
 
+  // Passport initialization (for Session-less JWT strategy)
+  app.use(passport.initialize());
+
   app.post("/api/auth/login", handleLogin);
+  app.post("/api/auth/register", handleRegister);
   app.post("/api/auth/logout", handleLogout);
   app.get("/api/auth/me", handleMe);
 
   app.use(dashboardRouter);
   app.use(detectionRouter);
+  app.use(authRouter);
 
   return app;
 }

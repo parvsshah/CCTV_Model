@@ -231,8 +231,16 @@ function RestrictedZones({ zones, setZones }: { zones: Zone[]; setZones: (z: Zon
   useEffect(() => { redraw(); }, [redraw]);
 
   const onCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
-    const x = e.clientX - rect.left; const y = e.clientY - rect.top;
+    const canvas = e.target as HTMLCanvasElement;
+    const rect = canvas.getBoundingClientRect();
+    
+    // Scale the generic mouse coordinates onto the actual canvas dimensions
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    
     setPoints((prev) => [...prev, { x, y }]);
   };
 

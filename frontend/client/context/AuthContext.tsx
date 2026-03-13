@@ -9,6 +9,7 @@ export interface AuthContextValue {
   user: UserSummary | null;
   status: AuthStatus;
   login: (payload: AuthLoginRequest) => Promise<void>;
+  register: (payload: any) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -45,6 +46,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setStatus("authenticated");
   }, []);
 
+  const register = useCallback(async (payload: any) => {
+    setStatus("checking");
+    const response = await apiClient.auth.register(payload);
+    authStorage.save(response.token, response.refreshToken);
+    setUser(response.user);
+    setStatus("authenticated");
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await apiClient.auth.logout();
@@ -62,9 +71,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       user,
       status,
       login,
+      register,
       logout,
     }),
-    [login, logout, status, user],
+    [login, register, logout, status, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

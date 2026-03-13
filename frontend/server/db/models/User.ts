@@ -25,8 +25,14 @@ export interface IUser extends Document {
 const UserSchema = new Schema<IUser>(
   {
     name: { type: String, required: true },
+    username: { type: String, required: true, unique: true, lowercase: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    passwordHash: { type: String, required: true },
+    passwordHash: { 
+      type: String, 
+      required: function(this: any) { return this.authProvider === 'local'; } 
+    },
+    authProvider: { type: String, enum: ["local", "google", "github"], default: "local" },
+    providerId: { type: String },
     role: { type: String, enum: ["admin", "analyst", "viewer"], default: "viewer" },
     avatarUrl: { type: String },
     contacts: {
@@ -43,6 +49,7 @@ const UserSchema = new Schema<IUser>(
   { timestamps: true },
 );
 
+UserSchema.index({ username: 1 }, { unique: true });
 UserSchema.index({ email: 1 }, { unique: true });
 
 UserSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {

@@ -1,46 +1,31 @@
-import { FormEvent, useState, useEffect } from "react";
-import { useNavigate, useLocation, Link } from "react-router-dom";
+import { FormEvent, useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import { ArrowRight, Github } from "lucide-react";
 import AppLayout from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { authStorage } from "@/lib/auth";
 
-export default function Login() {
-  const { login, status } = useAuth();
+export default function Register() {
+  const { register, status } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
+  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const isSubmitting = status === "checking";
-  const redirectPath = (location.state as { from?: Location })?.from?.pathname || "/";
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const token = params.get("token");
-    if (token) {
-      // If we got a token back from OAuth redirect
-      authStorage.save(token);
-      // We might need to refresh the "me" call here, or let AuthContext handle it on mount
-      // But AuthContext only checks storage once on mount. 
-      // Actually, AuthProvider has a me() check in useEffect but only on mount.
-      // Let's just reload the page to trigger AuthProvider's check
-      window.location.href = "/";
-    }
-  }, [location, navigate]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
     try {
-      await login({ email, password });
-      navigate(redirectPath, { replace: true });
+      await register({ name, username, email, password });
+      navigate("/");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to login");
+      setError(err instanceof Error ? err.message : "Unable to create account");
     }
   };
 
@@ -53,27 +38,52 @@ export default function Login() {
       <div className="mx-auto max-w-sm">
         <Card className="rounded-3xl border-2 border-slate-200/50 bg-gradient-to-br from-slate-50/40 to-slate-100/40 shadow-lg">
           <CardHeader>
-            <CardTitle className="text-center text-3xl font-bold text-foreground">Welcome back</CardTitle>
-            <p className="text-center text-sm text-muted-foreground mt-2">Sign in to your account to continue</p>
+            <CardTitle className="text-center text-3xl font-bold text-foreground">Create Account</CardTitle>
+            <p className="text-center text-sm text-muted-foreground mt-2">Join YOLO-CROWD to start monitoring</p>
           </CardHeader>
           <CardContent>
-            <form className="space-y-5" onSubmit={handleSubmit}>
-              <div className="space-y-2">
+            <form className="space-y-4" onSubmit={handleSubmit}>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-foreground" htmlFor="name">
+                  Full Name
+                </label>
+                <Input
+                  id="name"
+                  placeholder="John Doe"
+                  className="border-slate-200/50 rounded-lg"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-foreground" htmlFor="username">
+                  Username
+                </label>
+                <Input
+                  id="username"
+                  placeholder="johndoe"
+                  className="border-slate-200/50 rounded-lg"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-1">
                 <label className="text-sm font-medium text-foreground" htmlFor="email">
                   Email
                 </label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="admin@example.com"
-                  autoComplete="email"
+                  placeholder="john@example.com"
                   className="border-slate-200/50 rounded-lg"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   required
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <label className="text-sm font-medium text-foreground" htmlFor="password">
                   Password
                 </label>
@@ -81,7 +91,6 @@ export default function Login() {
                   id="password"
                   type="password"
                   placeholder="••••••••"
-                  autoComplete="current-password"
                   className="border-slate-200/50 rounded-lg"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
@@ -96,7 +105,7 @@ export default function Login() {
                 className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 rounded-lg font-semibold"
                 disabled={isSubmitting}
               >
-                {isSubmitting ? "Signing in..." : <>Continue <ArrowRight className="h-4 w-4 ml-2" /></>}
+                {isSubmitting ? "Creating account..." : <>Sign Up <ArrowRight className="h-4 w-4 ml-2" /></>}
               </Button>
             </form>
 
@@ -121,27 +130,10 @@ export default function Login() {
             </div>
 
             <div className="mt-6 text-center text-sm">
-              <span className="text-muted-foreground">Don't have an account? </span>
-              <Link to="/register" className="text-blue-600 font-semibold hover:underline">
-                Sign up
+              <span className="text-muted-foreground">Already have an account? </span>
+              <Link to="/login" className="text-blue-600 font-semibold hover:underline">
+                Login
               </Link>
-            </div>
-
-            <p className="text-center text-xs text-muted-foreground mt-6">
-              By continuing, you agree to our{" "}
-              <Link to="#" className="text-blue-600 hover:underline">
-                Terms
-              </Link>{" "}
-              &{" "}
-              <Link to="#" className="text-blue-600 hover:underline">
-                Privacy
-              </Link>
-              .
-            </p>
-            <div className="pt-2">
-              <p className="text-center text-sm text-muted-foreground">
-                Need credentials? Use <span className="font-medium text-foreground">admin@example.com / password</span>
-              </p>
             </div>
           </CardContent>
         </Card>
