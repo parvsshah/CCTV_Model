@@ -111,7 +111,7 @@ export default function UploadPage() {
             </CardContent>
           </Card>
 
-          <RestrictedZones zones={zones} setZones={setZones} />
+          <RestrictedZones zones={zones} setZones={setZones} file={file} url={url} />
         </div>
         <div className="space-y-6">
           <Card className="border-2 border-orange-200/50 bg-gradient-to-br from-orange-50/40 to-red-50/40">
@@ -192,18 +192,71 @@ function ConfigSlider({ label, value, onChange, min, max, step, suffix }: { labe
   );
 }
 
-function RestrictedZones({ zones, setZones }: { zones: Zone[]; setZones: (z: Zone[]) => void }) {
+function RestrictedZones({ zones, setZones, file, url }: { zones: Zone[]; setZones: (z: Zone[]) => void; file: File | null; url: string; }) {
   const [name, setName] = useState("");
   const [max, setMax] = useState(50);
   const [points, setPoints] = useState<{ x: number; y: number }[]>([]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [previewVideo, setPreviewVideo] = useState<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (!file && !url) {
+      setPreviewVideo(null);
+      return;
+    }
+
+    const v = document.createElement("video");
+    v.muted = true;
+    v.playsInline = true;
+    v.crossOrigin = "anonymous";
+
+    if (file) {
+      v.src = URL.createObjectURL(file);
+    } else if (url && (url.endsWith(".mp4") || url.endsWith(".webm") || url.startsWith("http"))) {
+      // Only try simple HTTP urls. Advanced streams like RTSP or HLS usually require specialized players
+      // but standard MP4s over HTTP will load fine here for a preview.
+      v.src = url;
+    } else {
+      setPreviewVideo(null);
+      return;
+    }
+
+    v.onloadedmetadata = () => {
+      // Seek to 0.5 seconds to bypass initial black frames
+      v.currentTime = Math.min(0.5, v.duration / 2 || 0);
+    };
+
+    v.onseeked = () => {
+      setPreviewVideo(v);
+    };
+
+    v.onerror = () => {
+      console.warn("Failed to load video preview for the given source.");
+      setPreviewVideo(null);
+    };
+
+    return () => {
+      if (file) URL.revokeObjectURL(v.src);
+      v.removeAttribute("src");
+      v.load();
+    };
+  }, [file, url]);
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current; if (!canvas) return;
     const ctx = canvas.getContext("2d"); if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#1a1a1a";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    if (previewVideo) {
+      ctx.drawImage(previewVideo, 0, 0, canvas.width, canvas.height);
+      // Add a slight dark overlay to make drawing more visible
+      ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
     if (points.length) {
       ctx.beginPath();
       ctx.moveTo(points[0].x, points[0].y);
@@ -226,7 +279,7 @@ function RestrictedZones({ zones, setZones }: { zones: Zone[]; setZones: (z: Zon
       ctx.fill();
       ctx.stroke();
     });
-  }, [points, zones]);
+  }, [points, zones, previewVideo]);
 
   useEffect(() => { redraw(); }, [redraw]);
 
