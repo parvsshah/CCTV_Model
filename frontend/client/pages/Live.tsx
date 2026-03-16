@@ -25,11 +25,11 @@ export default function Live() {
   useEffect(() => {
     const fetchStreamJobs = async () => {
       try {
-        const response = await fetch("/api/detection/jobs/streams");
-        if (response.ok) {
-          const data = await response.json();
-          setStreamJobs(data.jobs || []);
-        }
+        const apiUrl = import.meta.env.VITE_API_URL || "";
+        const response = await fetch(`${apiUrl}/api/detection/jobs/streams`);
+        if (!response.ok) throw new Error("Failed to fetch streams");
+        const data = await response.json();
+        setStreamJobs(data.jobs || []);
       } catch (error) {
         console.error("Failed to fetch stream jobs:", error);
       }
@@ -62,7 +62,8 @@ export default function Live() {
     }
 
     const updateFrame = () => {
-      setStreamFrame(`/api/detection/jobs/${activeJob.id}/stream?t=${Date.now()}`);
+      const apiUrl = import.meta.env.VITE_API_URL || "";
+      setStreamFrame(`${apiUrl}/api/detection/jobs/${activeJob.id}/stream?t=${Date.now()}`);
     };
 
     updateFrame();
@@ -78,7 +79,8 @@ export default function Live() {
       // For running jobs, use the live-data endpoint (in-memory buffer, no disk I/O)
       if (activeJob.status === "running") {
         try {
-          const response = await fetch(`/api/detection/jobs/${activeJob.id}/live-data`);
+          const apiUrl = import.meta.env.VITE_API_URL || "";
+          const response = await fetch(`${apiUrl}/api/detection/jobs/${activeJob.id}/live-data`);
           if (response.ok) {
             const data = await response.json();
             setLiveData(data.chartData || []);
@@ -102,7 +104,12 @@ export default function Live() {
       // Fallback: parse CSV for completed/failed jobs or if live-data not available
       if (!activeJob?.artifacts?.csv) return;
       try {
-        const response = await fetch(activeJob.artifacts!.csv!);
+        const apiUrl = import.meta.env.VITE_API_URL || "";
+        // If the backend returns a relative URL for CSV, prepend the API URL
+        const csvPath = activeJob.artifacts!.csv!.startsWith('/')
+          ? `${apiUrl}${activeJob.artifacts!.csv!}`
+          : activeJob.artifacts!.csv!;
+        const response = await fetch(csvPath);
         if (!response.ok) return;
 
         const text = await response.text();
@@ -154,17 +161,21 @@ export default function Live() {
 
     if (confirm(`Are you sure you want to terminate job ${activeJob.id}?`)) {
       try {
-        const response = await fetch(`/api/detection/jobs/${activeJob.id}/terminate`, {
+        const apiUrl = import.meta.env.VITE_API_URL || "";
+        const response = await fetch(`${apiUrl}/api/detection/jobs/${activeJob.id}/terminate`, {
           method: "POST",
         });
 
         if (response.ok) {
           alert("Job terminated successfully");
-          const jobsResponse = await fetch("/api/detection/jobs/streams");
-          if (jobsResponse.ok) {
-            const data = await jobsResponse.json();
-            setStreamJobs(data.jobs || []);
-          }
+          setTimeout(async () => {
+            const apiUrl = import.meta.env.VITE_API_URL || "";
+            const jobsResponse = await fetch(`${apiUrl}/api/detection/jobs/streams`);
+            if (jobsResponse.ok) {
+              const data = await jobsResponse.json();
+              setStreamJobs(data.jobs || []);
+            }
+          }, 1000); // Give backend a moment to update job status
         } else {
           const error = await response.json();
           alert(`Failed to terminate job: ${error.message}`);

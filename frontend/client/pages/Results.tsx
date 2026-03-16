@@ -93,7 +93,13 @@ function formatTime(timestamp: string): string {
     setHistoricalData(null);
     
     if (activeJob?.artifacts?.csv) {
-      fetch(activeJob.artifacts.csv)
+      const apiUrl = import.meta.env.VITE_API_URL || "";
+      // If the backend returns a relative URL for CSV, prepend the API URL
+      const csvPath = activeJob.artifacts.csv.startsWith('/') 
+        ? `${apiUrl}${activeJob.artifacts.csv}`
+        : activeJob.artifacts.csv;
+      
+      fetch(csvPath)
         .then((res) => {
           if (!res.ok) throw new Error("Failed to fetch CSV");
           return res.text();

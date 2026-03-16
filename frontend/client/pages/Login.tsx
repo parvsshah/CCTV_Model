@@ -45,7 +45,8 @@ export default function Login() {
   };
 
   const handleOAuth = (provider: "google" | "github") => {
-    window.location.href = `/api/auth/${provider}`;
+    const apiUrl = import.meta.env.VITE_API_URL || "";
+    window.location.href = `${apiUrl}/api/auth/${provider}`;
   };
 
   return (

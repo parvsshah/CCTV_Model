@@ -1,0 +1,15 @@
+node_modules
+frontend/node_modules
+__pycache__
+.venv
+runs
+uploads
+.env
+.idea
+.vscode
+.DS_Store
+*.pt
+!yolo-crowd.pt
+!yolov5s.pt
+!yolov5su.pt
+Yolov5_TensortRT_Convert_and_detect.ipynb

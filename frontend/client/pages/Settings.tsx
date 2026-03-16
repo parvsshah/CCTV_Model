@@ -95,7 +95,8 @@ export default function Settings() {
       formData.append("photo", file);
 
       try {
-        const response = await fetch("/api/user/profile-photo", {
+        const apiUrl = import.meta.env.VITE_API_URL || "";
+        const response = await fetch(`${apiUrl}/api/user/profile-photo`, {
           method: "POST",
           body: formData,
         });
@@ -311,7 +312,7 @@ export default function Settings() {
             <CardContent className="space-y-4">
               <div className="flex flex-col items-center mb-4">
                  <div className="h-24 w-24 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden border-2 border-orange-200 mb-4">
-                    <img src="/api/user/profile-photo" alt="Profile" className="h-full w-full object-cover" onError={(e) => {
+                     <img src={`${import.meta.env.VITE_API_URL || ""}/api/user/profile-photo`} alt="Profile" className="h-full w-full object-cover" onError={(e) => {
                       (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=User&background=random`;
                     }} />
                  </div>

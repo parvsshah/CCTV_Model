@@ -39,7 +39,8 @@ export default function Dashboard() {
     const fetchData = async () => {
       try {
         // Pass time range to API
-        const response = await fetch(`/api/dashboard/stats?timeRange=${preferences.timeRange}`);
+        const apiUrl = import.meta.env.VITE_API_URL || "";
+        const response = await fetch(`${apiUrl}/api/dashboard/stats?timeRange=${preferences.timeRange}`);
         if (!response.ok) throw new Error("Failed to fetch stats");
         const stats: DashboardStatsResponse = await response.json();
         setData(stats);
@@ -213,7 +214,8 @@ export default function Dashboard() {
                               onClick={async () => {
                                 if (!confirm(`Are you sure you want to terminate job "${j.name}"?`)) return;
                                 try {
-                                  const res = await fetch(`/api/detection/jobs/${j.id}/terminate`, { method: "POST" });
+                                  const apiUrl = import.meta.env.VITE_API_URL || "";
+                                  const res = await fetch(`${apiUrl}/api/detection/jobs/${j.id}/terminate`, { method: "POST" });
                                   if (res.ok) {
                                     toast({ title: "Job terminated", description: `Job "${j.name}" has been stopped.` });
                                   } else {
@@ -408,7 +410,8 @@ function LiveProcessingSection() {
   useEffect(() => {
     const fetchProcessingJobs = async () => {
       try {
-        const response = await fetch("/api/dashboard/processing-jobs");
+        const apiUrl = import.meta.env.VITE_API_URL || "";
+        const response = await fetch(`${apiUrl}/api/dashboard/processing-jobs`);
         if (response.ok) {
           const data = await response.json();
           setProcessingJobs(data.jobs || []);
