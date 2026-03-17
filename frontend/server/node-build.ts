@@ -5,20 +5,9 @@ import * as express from "express";
 const app = createServer();
 const port = process.env.PORT || 3000;
 
-// In production, serve the built SPA files
-const __dirname = import.meta.dirname;
-const distPath = path.join(__dirname, "../spa");
-
-// Serve static files
-app.use(express.static(distPath));
-
-// Handle React Router - serve index.html for all non-API routes
-app.use((req, res, next) => {
-  if (req.path.startsWith("/api/") || req.path.startsWith("/health")) {
-    return res.status(404).json({ error: "API endpoint not found" });
-  }
-
-  res.sendFile(path.join(distPath, "index.html"));
+// API Root route (useful for health checks on Render)
+app.get("/", (req, res) => {
+  res.json({ message: "YOLO-CROWD API is running." });
 });
 
 app.listen(port, () => {
