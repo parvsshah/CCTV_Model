@@ -463,16 +463,6 @@ def detect(save_img=False):
                 "t60": thresholds['yellow_max']
             })
             print(f"[DATA]{data_line}", flush=True)
-            
-            # Print progress every 10 frames
-            if frame_count % 10 == 0:
-                progress_pct = (frame_count / total_frames * 100) if total_frames > 0 and total_frames != float('inf') else 0
-                if total_frames == float('inf'):
-                    print(f'Frame {frame_count} - {n_people} people ({density_name}) - Max: {color_mapper.current_max} - FPS: {fps:.1f}')
-                else:
-                    print(f'Frame {frame_count}/{total_frames} ({progress_pct:.1f}%) - '
-                          f'{n_people} people ({density_name}) - '
-                          f'Max: {color_mapper.current_max} - FPS: {fps:.1f}')
 
             # Display results
             if view_img:
