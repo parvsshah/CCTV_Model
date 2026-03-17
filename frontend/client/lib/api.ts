@@ -40,7 +40,6 @@ async function request<TResponse>(
     const response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
       headers,
-      credentials: 'include',
     });
 
     // Handle 401 Unauthorized (token expired)
@@ -123,6 +122,12 @@ export const apiClient = {
   auth: {
     login: (payload: AuthLoginRequest) =>
       request<AuthLoginResponse>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify(payload),
+        skipAuth: true,
+      }),
+    register: (payload: any) =>
+      request<AuthLoginResponse>("/auth/register", {
         method: "POST",
         body: JSON.stringify(payload),
         skipAuth: true,
