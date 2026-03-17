@@ -23,8 +23,8 @@ WORKDIR /app/frontend
 # Install Node.js dependencies
 RUN npm install
 
-# Build the Express API server
-RUN npm run build:server
+# Build the full frontend (client AND server)
+RUN npm run build
 
 # Expose the API port
 EXPOSE 8080
