@@ -159,15 +159,53 @@ const modelPath = path.resolve(projectRoot, "yolo-crowd.pt");
 // Uploads directory
 const uploadsDir = process.env.DETECTION_UPLOAD_DIR ?? path.resolve(frontendRoot, "uploads");
 
-// Verify model exists
+import https from "https";
+import fsStream from "fs";
+
+// Verify model exists or download it
 async function verifyModelExists() {
   try {
     await fs.access(modelPath);
     return true;
   } catch (error) {
-    console.error(`[ERROR] YOLO model not found at: ${modelPath}`);
-    console.error('Please ensure the yolo-crowd.pt file exists in the project root.');
-    return false;
+    console.log(`[INFO] YOLO model not found at: ${modelPath}. Attempting to download...`);
+    
+    // Hosted on a stable release URL (replace if you have your own hosting)
+    const modelUrl = "https://github.com/parvsshah/CCTV_Model/releases/download/v1.0.0/yolo-crowd.pt";
+    
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const file = fsStream.createWriteStream(modelPath);
+        
+        const request = https.get(modelUrl, (response) => {
+          if (response.statusCode === 301 || response.statusCode === 302) {
+            // Handle redirect
+            https.get(response.headers.location!, (redirectResponse) => {
+              redirectResponse.pipe(file);
+              file.on("finish", () => {
+                file.close();
+                resolve();
+              });
+            }).on("error", (err) => {
+              fsStream.unlink(modelPath, () => reject(err));
+            });
+          } else {
+            response.pipe(file);
+            file.on("finish", () => {
+              file.close();
+              resolve();
+            });
+          }
+        }).on("error", (err) => {
+          fsStream.unlink(modelPath, () => reject(err));
+        });
+      });
+      console.log(`[INFO] Successfully downloaded yolo-crowd.pt`);
+      return true;
+    } catch (downloadError) {
+      console.error(`[ERROR] Failed to download yolo-crowd.pt:`, downloadError);
+      return false;
+    }
   }
 }
 
