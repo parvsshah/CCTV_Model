@@ -13,6 +13,7 @@ frontend/uploads/
 
 runs/face/*.pt
 *.pt
+!yolo-crowd.pt
 # Distribution / packaging
 .Python
 build/
@@ -21,8 +22,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
