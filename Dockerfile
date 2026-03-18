@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN apt-get update && apt-get install -y wget
 
 # Download model from GitHub Releases
-RUN wget -L https://github.com/parvsshah/CCTV_Model/releases/download/v1.0.0/yolo-crowd.pt
+RUN wget -L https://github.com/parvsshah/CCTV_Model/releases/download/v1.0.0/yolo-crowd.pt -O /app/yolo-crowd.pt
 
 # Copy the entire project
 COPY . .
