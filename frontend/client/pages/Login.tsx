@@ -66,7 +66,7 @@ export default function Login() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="admin@example.com"
+                  placeholder="Enter your email"
                   autoComplete="email"
                   className="border-slate-200/50 rounded-lg"
                   value={email}
@@ -139,11 +139,6 @@ export default function Login() {
               </Link>
               .
             </p>
-            <div className="pt-2">
-              <p className="text-center text-sm text-muted-foreground">
-                Need credentials? Use <span className="font-medium text-foreground">admin@example.com / password</span>
-              </p>
-            </div>
           </CardContent>
         </Card>
       </div>

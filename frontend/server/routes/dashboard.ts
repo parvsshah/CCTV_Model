@@ -200,28 +200,22 @@ function calculateStats(jobs: ReturnType<typeof listDetectionJobs>): {
   activeAlerts: number;
   processingJobs: number;
   avgDensity: number;
+  zoneStats: Array<{ name: string; value: number; color: string }>;
 } {
   let detectionsToday = 0;
   let totalPeopleSum = 0;
   let totalFrames = 0;
   let totalDensity = 0;
   let densityCount = 0;
+  
+  const zoneMap = new Map<string, number>();
 
   for (const job of jobs) {
     if (job.stats) {
-      // Total detections (sum of all people in all frames)
       detectionsToday += job.stats.totalDetections;
-
-      // For average calculation: sum of people across frames
-      // totalDetections = sum of people in all frames
-      // So we can use it directly
       totalPeopleSum += job.stats.totalDetections;
 
-      // Get frame count from stats if available
-      // Note: stats.totalDetections is already the sum, we need processedFrames
-      // We'll calculate average using averagePeople * processedFrames for accuracy
       if (job.stats.averagePeople !== undefined) {
-        // If we have processedFrames in stats, use it
         const frames = Math.round(job.stats.totalDetections / (job.stats.averagePeople || 1));
         totalFrames += frames;
       }
@@ -231,10 +225,13 @@ function calculateStats(jobs: ReturnType<typeof listDetectionJobs>): {
         totalDensity += density;
         densityCount += 1;
       }
+      
+      // Update zone stats
+      const currentZoneVal = zoneMap.get(job.sourceName) || 0;
+      zoneMap.set(job.sourceName, currentZoneVal + job.stats.totalDetections);
     }
   }
 
-  // Calculate average crowd count: total people / total frames
   const averageCrowdCount = totalFrames > 0 ? Math.round(totalPeopleSum / totalFrames) : 0;
 
   const activeAlerts = jobs.filter(
@@ -245,8 +242,19 @@ function calculateStats(jobs: ReturnType<typeof listDetectionJobs>): {
   ).length;
   const processingJobs = jobs.filter((j) => j.status === "running" || j.status === "queued").length;
   const avgDensity = densityCount > 0 ? Math.round((totalDensity / densityCount) * 10) / 10 : 0;
+  
+  // Format zone stats with colors
+  const colors = ["#3b82f6", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#ec4899"];
+  const zoneStats = Array.from(zoneMap.entries())
+    .map(([name, value], index) => ({
+      name,
+      value,
+      color: colors[index % colors.length],
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 5); // Top 5 zones
 
-  return { detectionsToday, averageCrowdCount, activeAlerts, processingJobs, avgDensity };
+  return { detectionsToday, averageCrowdCount, activeAlerts, processingJobs, avgDensity, zoneStats };
 }
 
 function mapJobToDetectionJob(job: ReturnType<typeof listDetectionJobs>[0]): DetectionJob {
@@ -289,6 +297,7 @@ router.get("/api/dashboard/stats", async (req, res) => {
       jobs: detectionJobs,
       alerts,
       chart,
+      zoneStats: stats.zoneStats,
     };
     res.json(response);
   } catch (error) {

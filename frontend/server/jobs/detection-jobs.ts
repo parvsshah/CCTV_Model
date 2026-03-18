@@ -162,47 +162,93 @@ const uploadsDir = process.env.DETECTION_UPLOAD_DIR ?? path.resolve(frontendRoot
 import https from "https";
 import fsStream from "fs";
 
-// Verify model exists or download it
-async function verifyModelExists() {
+// Helper for robust downloading with redirect handling
+async function downloadFile(url: string, dest: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = https.get(url, (response) => {
+      // Handle redirects (GitHub uses these for releases)
+      if (response.statusCode === 301 || response.statusCode === 302 || response.statusCode === 307 || response.statusCode === 308) {
+        const redirectUrl = response.headers.location;
+        if (redirectUrl) {
+          downloadFile(redirectUrl, dest).then(resolve).catch(reject);
+          return;
+        }
+      }
+
+      if (response.statusCode !== 200) {
+        reject(new Error(`Failed to download: Status ${response.statusCode}`));
+        return;
+      }
+
+      const contentType = String(response.headers["content-type"] ?? "").toLowerCase();
+      if (contentType.includes("text/html")) {
+        reject(new Error(`Refusing to download model: Content-Type is ${contentType || "text/html"}`));
+        response.resume(); // drain
+        return;
+      }
+
+      const file = fsStream.createWriteStream(dest);
+      response.pipe(file);
+
+      file.on("finish", () => {
+        file.close();
+        resolve();
+      });
+
+      file.on("error", (err) => {
+        fsStream.unlink(dest, () => reject(err));
+      });
+    });
+
+    request.on("error", (err) => {
+      fsStream.unlink(dest, () => reject(err));
+    });
+  });
+}
+
+async function validateModelFile(filePath: string): Promise<void> {
+  const stats = await fs.stat(filePath);
+  // YOLOv5 .pt weights are typically many MB. Anything under 5MB is almost always not real weights.
+  if (stats.size < 5 * 1024 * 1024) {
+    throw new Error(`Model file is too small (${stats.size} bytes)`);
+  }
+
+  // Guard against HTML error pages saved as .pt
+  const fd = await fs.open(filePath, "r");
   try {
-    await fs.access(modelPath);
+    const buf = Buffer.alloc(512);
+    const { bytesRead } = await fd.read(buf, 0, buf.length, 0);
+    const head = buf.slice(0, bytesRead).toString("utf8").toLowerCase();
+    if (head.includes("<!doctype html") || head.includes("<html") || head.includes("github.com")) {
+      throw new Error("Model file looks like an HTML page, not a PyTorch checkpoint");
+    }
+  } finally {
+    await fd.close();
+  }
+}
+
+// Verify model exists or download it
+export async function verifyModelExists() {
+  try {
+    await validateModelFile(modelPath);
     return true;
   } catch (error) {
-    console.log(`[INFO] YOLO model not found at: ${modelPath}. Attempting to download...`);
+    console.log(`[INFO] YOLO model not found or corrupted. Attempting to download...`);
     
-    // Hosted on a stable release URL (replace if you have your own hosting)
+    // Release URL
     const modelUrl = "https://github.com/parvsshah/CCTV_Model/releases/download/v1.0.0/yolo-crowd.pt";
     
     try {
-      await new Promise<void>((resolve, reject) => {
-        const file = fsStream.createWriteStream(modelPath);
-        
-        const request = https.get(modelUrl, (response) => {
-          if (response.statusCode === 301 || response.statusCode === 302) {
-            // Handle redirect
-            https.get(response.headers.location!, (redirectResponse) => {
-              redirectResponse.pipe(file);
-              file.on("finish", () => {
-                file.close();
-                resolve();
-              });
-            }).on("error", (err) => {
-              fsStream.unlink(modelPath, () => reject(err));
-            });
-          } else {
-            response.pipe(file);
-            file.on("finish", () => {
-              file.close();
-              resolve();
-            });
-          }
-        }).on("error", (err) => {
-          fsStream.unlink(modelPath, () => reject(err));
-        });
-      });
-      console.log(`[INFO] Successfully downloaded yolo-crowd.pt`);
+      await downloadFile(modelUrl, modelPath);
+      
+      // Verify after download
+      await validateModelFile(modelPath);
+      const newStats = await fs.stat(modelPath);
+      console.log(`[INFO] Successfully downloaded and verified yolo-crowd.pt (${Math.round(newStats.size / (1024*1024))} MB)`);
       return true;
     } catch (downloadError) {
+      // Clean up the bad file if any
+      await fs.unlink(modelPath).catch(() => {});
       console.error(`[ERROR] Failed to download yolo-crowd.pt:`, downloadError);
       return false;
     }
@@ -210,19 +256,22 @@ async function verifyModelExists() {
 }
 
 // Verify Python environment
-async function verifyPythonEnvironment() {
+export async function verifyPythonEnvironment() {
   try {
     const { stdout } = await promisify(exec)(`${pythonBin} --version`);
     console.log(`[INFO] Using Python: ${stdout.trim()}`);
 
-    // Check for required Python packages
-    const { stdout: pipList } = await promisify(exec)(`${pythonBin} -m pip list`);
-    const requiredPackages = ['torch', 'torchvision', 'opencv-python', 'numpy'];
-    const missingPackages = requiredPackages.filter(pkg => !pipList.includes(pkg));
-
-    if (missingPackages.length > 0) {
-      console.error(`[ERROR] Missing required Python packages: ${missingPackages.join(', ')}`);
-      console.error('Please install them using: pip install -r requirements.txt');
+    // Check for required Python packages by attempting to import them
+    // This is more reliable than parsing pip list strings
+    const checkCommand = `${pythonBin} -c "import torch; import torchvision; import cv2; import numpy; print('OK')"`;
+    try {
+      const { stdout: checkOutput } = await promisify(exec)(checkCommand);
+      if (checkOutput.trim() === 'OK') {
+        return true;
+      }
+    } catch (e) {
+      console.error(`[ERROR] Missing or broken Python packages.`);
+      console.error('Please ensure torch, torchvision, opencv-python, and numpy are installed.');
       return false;
     }
 
@@ -237,7 +286,7 @@ async function verifyPythonEnvironment() {
 let isEnvironmentReady = false;
 let environmentCheckInProgress = false;
 
-async function initializeEnvironment() {
+export async function initializeEnvironment() {
   if (isEnvironmentReady) return true;
   if (environmentCheckInProgress) {
     // Wait for the ongoing check to complete
@@ -268,8 +317,8 @@ async function initializeEnvironment() {
   }
 }
 
-// Initialize environment on startup
-void initializeEnvironment();
+// Side effects removed for build-time safety (Vercel compatibility)
+// void initializeEnvironment();
 
 const jobs = new Map<string, DetectionJobInternal>();
 
@@ -795,7 +844,7 @@ export function listDetectionJobs() {
 }
 
 // Ensure all required directories exist on startup
-async function ensureDirectories() {
+export async function ensureDirectories() {
   const dirs = [
     runsDir,
     processedDir,
@@ -814,10 +863,10 @@ async function ensureDirectories() {
   return true;
 }
 
-// Run directory check on startup
-void ensureDirectories().then(() =>
-  console.log('Directory initialization complete')
-).catch(console.error);
+// Side effects removed for build-time safety
+// void ensureDirectories().then(() =>
+//   console.log('Directory initialization complete')
+// ).catch(console.error);
 
 export const detectionPaths = {
   uploadsDir,

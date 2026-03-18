@@ -82,6 +82,7 @@ export interface DashboardStatsResponse {
   jobs: DetectionJob[];
   alerts: AlertSummary[];
   chart: Array<{ time: string; value: number }>;
+  zoneStats: Array<{ name: string; value: number; color: string }>;
 }
 
 export type DetectionSourceType = "upload" | "stream" | "camera" | "file";

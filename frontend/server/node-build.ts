@@ -1,6 +1,7 @@
 import path from "path";
 import { createServer } from "./index";
 import * as express from "express";
+import { ensureDirectories, initializeEnvironment } from "./jobs/detection-jobs";
 
 const app = createServer();
 const port = process.env.PORT || 3000;
@@ -10,11 +11,25 @@ app.get("/", (req, res) => {
   res.json({ message: "YOLO-CROWD API is running." });
 });
 
-app.listen(port, () => {
-  console.log(`🚀 Fusion Starter server running on port ${port}`);
-  console.log(`📱 Frontend: http://localhost:${port}`);
-  console.log(`🔧 API: http://localhost:${port}/api`);
-});
+// Initialize and start server
+async function startServer() {
+  try {
+    console.log("[Server] Initializing directories and environment...");
+    await ensureDirectories();
+    await initializeEnvironment();
+    
+    app.listen(port, () => {
+      console.log(`🚀 Fusion Starter server running on port ${port}`);
+      console.log(`📱 Frontend: http://localhost:${port}`);
+      console.log(`🔧 API: http://localhost:${port}/api`);
+    });
+  } catch (error) {
+    console.error("[Server] Critical initialization failure:", error);
+    process.exit(1);
+  }
+}
+
+startServer();
 
 // Graceful shutdown
 process.on("SIGTERM", () => {

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,9 +12,11 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AlertTriangle, Bell, LogOut, Save, Mail, BarChart3 } from "lucide-react";
 import { DetectionViewMode, TimeRange, UserPreferences } from "@shared/api";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Settings() {
   const { toast } = useToast();
+  const { user, logout } = useAuth();
 
   // Settings state
   const [notifications, setNotifications] = useState(true);
@@ -22,6 +25,7 @@ export default function Settings() {
   const [theme, setTheme] = useState<"light" | "dark" | "system">("light");
   const [apiKey, setApiKey] = useState("sk_live_••••••••••••••••••••••••");
   const [showApiKey, setShowApiKey] = useState(false);
+  const [connectedLinks, setConnectedLinks] = useState<string[]>([]);
 
   // Detection preferences
   const [detectionViewMode, setDetectionViewMode] = useState<DetectionViewMode>("average");
@@ -48,6 +52,33 @@ export default function Settings() {
     } catch (error) {
       console.error("Failed to load preferences:", error);
     }
+  }, []);
+  
+  // Fetch connected service links (RTSP/URLs from history)
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || "";
+        const response = await fetch(`${apiUrl}/api/detection/jobs`);
+        if (response.ok) {
+          const data = await response.json();
+          const jobs = data.jobs || [];
+          
+          // Get unique stream URLs or RTSP links
+          const links = jobs
+            .filter((j: any) => j.sourceType === "stream" || (j.sourcePath && (j.sourcePath.startsWith("http") || j.sourcePath.startsWith("rtsp"))))
+            .map((j: any) => j.sourcePath)
+            .filter((path: string, index: number, self: string[]) => self.indexOf(path) === index)
+            .slice(0, 5); // Show last 5 unique links
+            
+          setConnectedLinks(links);
+        }
+      } catch (error) {
+        console.error("Failed to fetch job history for settings:", error);
+      }
+    };
+    
+    fetchHistory();
   }, []);
 
   const handleSave = () => {
@@ -273,7 +304,10 @@ export default function Settings() {
             <CardHeader>
               <CardTitle className="text-lg">API Configuration</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 opacity-50 pointer-events-none">
+              <div className="bg-amber-50 border border-amber-200 text-amber-700 text-xs px-3 py-2 rounded-lg mb-2">
+                API access is currently disabled for your plan tier.
+              </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">API Key</label>
                 <div className="flex gap-2">
@@ -281,10 +315,12 @@ export default function Settings() {
                     type={showApiKey ? "text" : "password"}
                     value={apiKey}
                     readOnly
+                    disabled
                     className="border-slate-200/50 rounded-lg bg-slate-50 dark:bg-slate-900"
                   />
                   <Button
                     variant="outline"
+                    disabled
                     className="border-slate-200/50 rounded-lg"
                     onClick={() => setShowApiKey(!showApiKey)}
                   >
@@ -293,10 +329,10 @@ export default function Settings() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1 border-slate-200/50 rounded-lg">
+                <Button variant="outline" disabled className="flex-1 border-slate-200/50 rounded-lg">
                   Copy Key
                 </Button>
-                <Button variant="outline" className="flex-1 border-slate-200/50 rounded-lg">
+                <Button variant="outline" disabled className="flex-1 border-slate-200/50 rounded-lg">
                   Regenerate
                 </Button>
               </div>
@@ -322,7 +358,7 @@ export default function Settings() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Email Address</p>
-                <p className="font-medium text-foreground">user@example.com</p>
+                <p className="font-medium text-foreground">{user?.email || "user@example.com"}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Plan</p>
@@ -340,21 +376,39 @@ export default function Settings() {
 
           <Card className="border-2 border-slate-200/50">
             <CardHeader>
-              <CardTitle className="text-lg">Connected Services</CardTitle>
+              <CardTitle className="text-lg">Live Stream Sources</CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">Recently connected RTSP and URL sources</p>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-foreground text-sm">GitHub</p>
-                  <p className="text-xs text-muted-foreground">Connected</p>
+              {connectedLinks.length > 0 ? (
+                connectedLinks.map((link, idx) => (
+                  <div key={idx} className="group relative">
+                    <div className="flex items-center justify-between p-2 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-100/50 transition-colors">
+                      <div className="flex-1 min-w-0 pr-8">
+                        <p className="text-xs font-mono text-blue-600 truncate">{link}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Active Connection</p>
+                      </div>
+                      <span className="text-[10px] font-medium text-green-600 bg-green-100/50 px-1.5 py-0.5 rounded-full">✓</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-6 border-2 border-dashed border-slate-200 rounded-xl">
+                  <p className="text-xs text-muted-foreground">No active stream sources found</p>
+                  <Link to="/upload" className="text-[10px] text-blue-600 hover:underline mt-1 inline-block">
+                    Connect a source
+                  </Link>
                 </div>
-                <span className="text-xs font-medium text-green-600 bg-green-100/50 px-2 py-1 rounded-full">✓</span>
-              </div>
+              )}
             </CardContent>
           </Card>
 
           <div className="space-y-3 pt-2">
-            <Button className="w-full border-red-200/50 rounded-lg text-red-600 hover:bg-red-50" variant="outline">
+            <Button 
+                className="w-full border-red-200/50 rounded-lg text-red-600 hover:bg-red-50" 
+                variant="outline"
+                onClick={() => logout()}
+            >
               <LogOut className="h-4 w-4 mr-2" /> Sign Out
             </Button>
             <Button className="w-full border-red-200/50 rounded-lg text-red-600 hover:bg-red-50" variant="outline">

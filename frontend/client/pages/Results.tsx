@@ -11,28 +11,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { apiClient } from "@/lib/api";
 import type { DetectionJobSummary, DetectionPredictionResponse } from "@shared/api";
 
-const fallbackTimelineData = [
-  { time: "00:00", people: 12 },
-  { time: "05:00", people: 34 },
-  { time: "10:00", people: 56 },
-  { time: "15:00", people: 48 },
-  { time: "20:00", people: 62 },
-  { time: "25:00", people: 71 },
-  { time: "30:00", people: 68 },
-];
-
-const zoneStatsData = [
-  { name: "Entry Point", value: 245, color: "#3b82f6" },
-  { name: "Central Area", value: 412, color: "#f59e0b" },
-  { name: "Exit Corridor", value: 198, color: "#10b981" },
-];
-
-const alertsData = [
-  { id: "1", time: "14:23", zone: "Central Area", level: "high", message: "Crowd surge detected", people: 98 },
-  { id: "2", time: "14:18", zone: "Entry Point", level: "medium", message: "Density rising", people: 67 },
-  { id: "3", time: "14:12", zone: "Exit Corridor", level: "low", message: "Steady flow", people: 42 },
-  { id: "4", time: "14:05", zone: "Central Area", level: "high", message: "Capacity warning", people: 95 },
-];
+// Mock data removed in favor of real API data
 
 export default function Results() {
   const { toast } = useToast();
@@ -42,6 +21,8 @@ export default function Results() {
   const [prediction, setPrediction] = useState<DetectionPredictionResponse | null>(null);
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [isPredicting, setIsPredicting] = useState(false);
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [zoneStats, setZoneStats] = useState<any[]>([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -66,6 +47,27 @@ export default function Results() {
       isMounted = false;
     };
   }, [toast]);
+
+  // Fetch dashboard stats (alerts and zone data)
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || "";
+        const response = await fetch(`${apiUrl}/api/dashboard/stats`);
+        if (response.ok) {
+          const data = await response.json();
+          setAlerts(data.alerts || []);
+          setZoneStats(data.zoneStats || []);
+        }
+      } catch (error) {
+        console.error("Failed to fetch dashboard stats:", error);
+      }
+    };
+
+    fetchStats();
+    const interval = setInterval(fetchStats, 10000); // Update every 10s
+    return () => clearInterval(interval);
+  }, []);
 
   const activeJob = useMemo(() => {
     if (!selectedJobId) {
@@ -145,13 +147,7 @@ function formatTime(timestamp: string): string {
     if (historicalData && historicalData.length > 0) {
       return historicalData;
     }
-    return fallbackTimelineData.map((item, index) => ({
-      frame: index,
-      actual: item.people,
-      predicted: item.people,
-      isFuture: false,
-      time: item.time,
-    }));
+    return []; // Return empty if no data
   }, [prediction, historicalData]);
   const jobStats = activeJob?.stats;
   const predictionStats = prediction?.stats;
@@ -354,20 +350,28 @@ function formatTime(timestamp: string): string {
             </CardHeader>
             <CardContent>
               <div className="space-y-2.5">
-                {alertsData.map((alert) => (
-                  <div key={alert.id} className={`flex items-center justify-between rounded-lg border-2 p-3 ${getAlertColor(alert.level)}`}>
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <span className="text-lg">{getAlertIcon(alert.level)}</span>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground">{alert.message}</p>
-                        <p className="text-xs text-muted-foreground">{alert.zone} at {alert.time} • {alert.people} people</p>
+                {alerts.length > 0 ? (
+                  alerts.map((alert) => (
+                    <div key={alert.id} className={`flex items-center justify-between rounded-lg border-2 p-3 ${getAlertColor(alert.level)}`}>
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <span className="text-lg">{getAlertIcon(alert.level)}</span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground">{alert.message}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {alert.zone} at {new Date(alert.triggeredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {alert.peopleCount} people
+                          </p>
+                        </div>
                       </div>
+                      <span className={`text-xs px-3 py-1 rounded-full font-medium ${alert.level === "high" ? "bg-red-200/50 text-red-700" : alert.level === "medium" ? "bg-amber-200/50 text-amber-700" : "bg-blue-200/50 text-blue-700"}`}>
+                        {alert.level.toUpperCase()}
+                      </span>
                     </div>
-                    <span className={`text-xs px-3 py-1 rounded-full font-medium ${alert.level === "high" ? "bg-red-200/50 text-red-700" : alert.level === "medium" ? "bg-amber-200/50 text-amber-700" : "bg-blue-200/50 text-blue-700"}`}>
-                      {alert.level.toUpperCase()}
-                    </span>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground text-sm italic">
+                    No recent alerts recorded.
                   </div>
-                ))}
+                )}
               </div>
             </CardContent>
           </Card>
@@ -380,23 +384,29 @@ function formatTime(timestamp: string): string {
             </CardHeader>
             <CardContent className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={zoneStatsData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, value }) => `${name}: ${value}`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {zoneStatsData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => `${value} people`} />
-                </PieChart>
+                {zoneStats.length > 0 ? (
+                  <PieChart>
+                    <Pie
+                      data={zoneStats}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, value }) => `${name}: ${value}`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {zoneStats.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => `${value} people detections`} />
+                  </PieChart>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-sm text-muted-foreground italic">
+                    Insufficient data for zone analysis.
+                  </div>
+                )}
               </ResponsiveContainer>
             </CardContent>
           </Card>
