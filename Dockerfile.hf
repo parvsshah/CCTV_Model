@@ -30,12 +30,12 @@ RUN npm install
 # Build the Express API server
 RUN npm run build:server
 
-# Create required directories with proper permissions
-RUN mkdir -p /app/frontend/uploads /app/runs && chmod -R 777 /app/frontend/uploads /app/runs
+# Hugging Face Spaces runs as a non-root user (id 1000)
+# We need to ensure the entire app directory is writable by this user
+RUN chmod -R 777 /app
 
-# HF Spaces requires port 7860
+# Expose the API port (Hugging Face default is 7860)
 EXPOSE 7860
-ENV PORT=7860
 
-# Start the Express API server
+# Start the Express API server (HF automatically sets PORT=7860)
 CMD ["npm", "start"]

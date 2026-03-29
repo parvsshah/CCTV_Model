@@ -132,4 +132,14 @@ export const authStorage = {
   },
 };
 
-
+/**
+ * Returns auth headers for raw fetch() calls.
+ * Usage: fetch(url, { headers: authHeaders() })
+ */
+export function authHeaders(): Record<string, string> {
+  const token = authStorage.getToken();
+  if (token) {
+    return { Authorization: `Bearer ${token}` };
+  }
+  return {};
+}

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { DashboardStatsResponse, DetectionJob, AlertSummary, TimeRange } from "@shared/api";
 import { listDetectionJobs, getLiveData } from "../jobs/detection-jobs";
+import { requireAuth } from "../middleware/auth-middleware";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -276,10 +277,11 @@ function mapJobToDetectionJob(job: ReturnType<typeof listDetectionJobs>[0]): Det
   };
 }
 
-router.get("/api/dashboard/stats", async (req, res) => {
+router.get("/api/dashboard/stats", requireAuth, async (req, res) => {
   try {
+    const userId = (req as any).userId as string;
     const timeRange = req.query.timeRange as TimeRange | undefined;
-    const allJobs = listDetectionJobs();
+    const allJobs = listDetectionJobs(userId);
 
     // Filter jobs by time range
     const filteredJobs = filterJobsByTimeRange(allJobs, timeRange);
@@ -307,9 +309,10 @@ router.get("/api/dashboard/stats", async (req, res) => {
 });
 
 // Get currently processing jobs for live stream display
-router.get("/api/dashboard/processing-jobs", (_req, res) => {
+router.get("/api/dashboard/processing-jobs", requireAuth, (req, res) => {
   try {
-    const jobs = listDetectionJobs();
+    const userId = (req as any).userId as string;
+    const jobs = listDetectionJobs(userId);
     const processingJobs = jobs
       .filter((j) => j.status === "running" || j.status === "queued")
       .slice(0, 4) // Limit to 4 concurrent streams

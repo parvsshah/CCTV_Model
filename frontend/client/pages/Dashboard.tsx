@@ -7,6 +7,7 @@ import { ArrowRight, AlertTriangle, Play, UploadCloud, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { apiClient } from "@/lib/api";
+import { authHeaders } from "@/lib/auth";
 import { DashboardStatsResponse, AlertSummary, DetectionJob, UserPreferences } from "@shared/api";
 import { useToast } from "@/hooks/use-toast";
 import { LiveProcessingBox } from "@/components/LiveProcessingBox";
@@ -40,7 +41,9 @@ export default function Dashboard() {
       try {
         // Pass time range to API
         const apiUrl = import.meta.env.VITE_API_URL || "";
-        const response = await fetch(`${apiUrl}/api/dashboard/stats?timeRange=${preferences.timeRange}`);
+        const response = await fetch(`${apiUrl}/api/dashboard/stats?timeRange=${preferences.timeRange}`, {
+          headers: authHeaders(),
+        });
         if (!response.ok) throw new Error("Failed to fetch stats");
         const stats: DashboardStatsResponse = await response.json();
         setData(stats);
@@ -63,6 +66,7 @@ export default function Dashboard() {
           jobs: [],
           alerts: [],
           chart: [],
+          zoneStats: [],
         });
       } finally {
         setLoading(false);
@@ -215,7 +219,7 @@ export default function Dashboard() {
                                 if (!confirm(`Are you sure you want to terminate job "${j.name}"?`)) return;
                                 try {
                                   const apiUrl = import.meta.env.VITE_API_URL || "";
-                                  const res = await fetch(`${apiUrl}/api/detection/jobs/${j.id}/terminate`, { method: "POST" });
+                                  const res = await fetch(`${apiUrl}/api/detection/jobs/${j.id}/terminate`, { method: "POST", headers: authHeaders() });
                                   if (res.ok) {
                                     toast({ title: "Job terminated", description: `Job "${j.name}" has been stopped.` });
                                   } else {
@@ -411,7 +415,9 @@ function LiveProcessingSection() {
     const fetchProcessingJobs = async () => {
       try {
         const apiUrl = import.meta.env.VITE_API_URL || "";
-        const response = await fetch(`${apiUrl}/api/dashboard/processing-jobs`);
+        const response = await fetch(`${apiUrl}/api/dashboard/processing-jobs`, {
+          headers: authHeaders(),
+        });
         if (response.ok) {
           const data = await response.json();
           setProcessingJobs(data.jobs || []);

@@ -108,6 +108,7 @@ export interface DetectionJobSummary {
   status: DetectionJobStatus;
   sourceType: DetectionSourceType;
   sourceName: string;
+  sourcePath?: string;
   createdAt: string;
   updatedAt: string;
   config: DetectionConfig;

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
+import { authHeaders } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,7 +60,9 @@ export default function Settings() {
     const fetchHistory = async () => {
       try {
         const apiUrl = import.meta.env.VITE_API_URL || "";
-        const response = await fetch(`${apiUrl}/api/detection/jobs`);
+        const response = await fetch(`${apiUrl}/api/detection/jobs`, {
+          headers: authHeaders(),
+        });
         if (response.ok) {
           const data = await response.json();
           const jobs = data.jobs || [];

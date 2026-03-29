@@ -20,6 +20,7 @@ import {
   runPredictionForJob,
 } from "../jobs/detection-jobs";
 import { detectFileExtension } from "../utils/file-utils";
+import { requireAuth, optionalAuth } from "../middleware/auth-middleware";
 
 // Configure multer to preserve file extensions
 const storage = multer.diskStorage({
@@ -85,9 +86,11 @@ async function ensureFilePermissions(filePath: string): Promise<void> {
 
 router.post(
   "/api/detection/start",
+  requireAuth,
   upload.single("file"),
   async (req, res) => {
     try {
+      const userId = (req as any).userId as string;
       const file = req.file;
       const sourceType = (req.body.sourceType as DetectionSourceType) || (file ? "upload" : "stream");
       const streamUrl = req.body.streamUrl as string | undefined;
@@ -139,6 +142,7 @@ router.post(
         sourceName: file?.originalname || streamUrl || "Unknown Source",
         config,
         notes: req.body.notes as string | undefined,
+        userId,
       });
 
       const response: DetectionStartResponse = { job };
@@ -157,29 +161,32 @@ router.post(
   }
 );
 
-router.get("/api/detection/jobs", (_req, res) => {
-  const jobs = listDetectionJobs();
+router.get("/api/detection/jobs", requireAuth, (req, res) => {
+  const userId = (req as any).userId as string;
+  const jobs = listDetectionJobs(userId);
   const response: DetectionJobListResponse = { jobs };
   res.json(response);
 });
 
 // Get running jobs (for Live page — includes all types, not just streams)
-router.get("/api/detection/jobs/streams", (_req, res) => {
-  const allJobs = listDetectionJobs();
+router.get("/api/detection/jobs/streams", requireAuth, (req, res) => {
+  const userId = (req as any).userId as string;
+  const allJobs = listDetectionJobs(userId);
   const liveJobs = allJobs.filter(job => job.status === "running" || job.status === "queued");
   const response: DetectionJobListResponse = { jobs: liveJobs };
   res.json(response);
 });
 
-router.get("/api/detection/jobs/:id", (req, res) => {
-  const job = getDetectionJob(req.params.id);
+router.get("/api/detection/jobs/:id", requireAuth, (req, res) => {
+  const userId = (req as any).userId as string;
+  const job = getDetectionJob(req.params.id, userId);
   if (!job) {
     return res.status(404).json({ message: "Job not found" });
   }
   res.json({ job });
 });
 
-router.post("/api/detection/jobs/:id/predict", async (req, res) => {
+router.post("/api/detection/jobs/:id/predict", requireAuth, async (req, res) => {
   const jobId = req.params.id;
   const future = parseNumber((req.body as any)?.future ?? 50, 50);
   try {
@@ -194,7 +201,7 @@ router.post("/api/detection/jobs/:id/predict", async (req, res) => {
 });
 
 // Get real-time live data from in-memory buffer
-router.get("/api/detection/jobs/:id/live-data", (req, res) => {
+router.get("/api/detection/jobs/:id/live-data", requireAuth, (req, res) => {
   const jobId = req.params.id;
   const data = getLiveData(jobId);
 
@@ -209,7 +216,7 @@ router.get("/api/detection/jobs/:id/live-data", (req, res) => {
 });
 
 // Serve live stream frames
-router.get("/api/detection/jobs/:id/stream", async (req, res) => {
+router.get("/api/detection/jobs/:id/stream", optionalAuth, async (req, res) => {
   const jobId = req.params.id;
   try {
     const job = getDetectionJob(jobId);
@@ -244,7 +251,7 @@ router.get("/api/detection/jobs/:id/stream", async (req, res) => {
 });
 
 // Terminate a running job
-router.post("/api/detection/jobs/:id/terminate", async (req, res) => {
+router.post("/api/detection/jobs/:id/terminate", requireAuth, async (req, res) => {
   const jobId = req.params.id;
   try {
     const job = getDetectionJob(jobId);

@@ -24,6 +24,7 @@ import {
 
 interface DetectionJobInternal {
   id: string;
+  userId?: string;
   status: DetectionJobStatus;
   sourceType: DetectionSourceType;
   sourceName: string;
@@ -68,6 +69,7 @@ export interface CreateDetectionJobInput {
   sourceName: string;
   config: DetectionConfig;
   notes?: string;
+  userId?: string;
 }
 
 // ── In-Memory Live Buffer ──
@@ -539,6 +541,7 @@ function serializeJob(job: DetectionJobInternal): DetectionJobSummary {
     status: job.status,
     sourceType: job.sourceType,
     sourceName: job.sourceName,
+    sourcePath: job.sourcePath,
     createdAt: job.createdAt.toISOString(),
     updatedAt: job.updatedAt.toISOString(),
     config: job.config,
@@ -778,6 +781,7 @@ export async function createDetectionJob(
   const now = new Date();
   const job: DetectionJobInternal = {
     id,
+    userId: input.userId,
     status: "queued",
     sourceType: input.sourceType,
     sourceName,
@@ -800,9 +804,11 @@ export async function createDetectionJob(
   return serializeJob(job);
 }
 
-export function getDetectionJob(id: string) {
+export function getDetectionJob(id: string, userId?: string) {
   const job = jobs.get(id);
-  return job ? serializeJob(job) : undefined;
+  if (!job) return undefined;
+  if (userId && job.userId && job.userId !== userId) return undefined;
+  return serializeJob(job);
 }
 
 export function getLiveData(jobId: string) {
@@ -837,8 +843,12 @@ export function getLiveData(jobId: string) {
   };
 }
 
-export function listDetectionJobs() {
-  return Array.from(jobs.values())
+export function listDetectionJobs(userId?: string) {
+  let jobList = Array.from(jobs.values());
+  if (userId) {
+    jobList = jobList.filter((j) => j.userId === userId);
+  }
+  return jobList
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .map((job) => serializeJob(job));
 }
@@ -1181,6 +1191,7 @@ async function persistJobToDB(job: DetectionJobInternal, input: CreateDetectionJ
   try {
     await JobModel.create({
       jobId: job.id,
+      userId: job.userId,
       status: job.status,
       sourceType: job.sourceType,
       sourceName: job.sourceName,

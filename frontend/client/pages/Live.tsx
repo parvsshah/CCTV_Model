@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Pause, Play, AlertTriangle, Zap, XCircle, Monitor } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import type { DetectionJobSummary } from "@shared/api";
+import { authHeaders } from "@/lib/auth";
 
 export default function Live() {
   const [streamJobs, setStreamJobs] = useState<DetectionJobSummary[]>([]);
@@ -26,7 +27,9 @@ export default function Live() {
     const fetchStreamJobs = async () => {
       try {
         const apiUrl = import.meta.env.VITE_API_URL || "";
-        const response = await fetch(`${apiUrl}/api/detection/jobs/streams`);
+        const response = await fetch(`${apiUrl}/api/detection/jobs/streams`, {
+          headers: authHeaders(),
+        });
         if (!response.ok) throw new Error("Failed to fetch streams");
         const data = await response.json();
         setStreamJobs(data.jobs || []);
@@ -80,7 +83,9 @@ export default function Live() {
       if (activeJob.status === "running") {
         try {
           const apiUrl = import.meta.env.VITE_API_URL || "";
-          const response = await fetch(`${apiUrl}/api/detection/jobs/${activeJob.id}/live-data`);
+          const response = await fetch(`${apiUrl}/api/detection/jobs/${activeJob.id}/live-data`, {
+            headers: authHeaders(),
+          });
           if (response.ok) {
             const data = await response.json();
             setLiveData(data.chartData || []);
@@ -164,13 +169,16 @@ export default function Live() {
         const apiUrl = import.meta.env.VITE_API_URL || "";
         const response = await fetch(`${apiUrl}/api/detection/jobs/${activeJob.id}/terminate`, {
           method: "POST",
+          headers: authHeaders(),
         });
 
         if (response.ok) {
           alert("Job terminated successfully");
           setTimeout(async () => {
             const apiUrl = import.meta.env.VITE_API_URL || "";
-            const jobsResponse = await fetch(`${apiUrl}/api/detection/jobs/streams`);
+            const jobsResponse = await fetch(`${apiUrl}/api/detection/jobs/streams`, {
+              headers: authHeaders(),
+            });
             if (jobsResponse.ok) {
               const data = await jobsResponse.json();
               setStreamJobs(data.jobs || []);

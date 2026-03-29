@@ -18,7 +18,8 @@ export function createServer() {
   app.use(cors({
     origin: [
       "http://localhost:5173",
-      "https://crowd-analysis.vercel.app"
+      "https://crowd-analysis.vercel.app",
+      "https://bytemaster000-crowd-analysis.hf.space"
     ],
     credentials: true
   }));

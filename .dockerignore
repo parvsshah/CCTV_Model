@@ -5,6 +5,7 @@ __pycache__
 runs
 uploads
 .env
+frontend/.env
 .idea
 .vscode
 .DS_Store

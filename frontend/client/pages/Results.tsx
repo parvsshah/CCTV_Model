@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { apiClient } from "@/lib/api";
+import { authHeaders } from "@/lib/auth";
 import type { DetectionJobSummary, DetectionPredictionResponse } from "@shared/api";
 
 // Mock data removed in favor of real API data
@@ -53,7 +54,9 @@ export default function Results() {
     const fetchStats = async () => {
       try {
         const apiUrl = import.meta.env.VITE_API_URL || "";
-        const response = await fetch(`${apiUrl}/api/dashboard/stats`);
+        const response = await fetch(`${apiUrl}/api/dashboard/stats`, {
+          headers: authHeaders(),
+        });
         if (response.ok) {
           const data = await response.json();
           setAlerts(data.alerts || []);
