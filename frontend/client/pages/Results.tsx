@@ -12,6 +12,14 @@ import { apiClient } from "@/lib/api";
 import { authHeaders } from "@/lib/auth";
 import type { DetectionJobSummary, DetectionPredictionResponse } from "@shared/api";
 
+// Helper to resolve artifact URLs against the backend (HF Spaces)
+function resolveArtifactUrl(path?: string): string | undefined {
+  if (!path) return undefined;
+  if (path.startsWith('http')) return path;
+  const apiUrl = import.meta.env.VITE_API_URL || "";
+  return `${apiUrl}${path}`;
+}
+
 // Mock data removed in favor of real API data
 
 export default function Results() {
@@ -421,7 +429,7 @@ function formatTime(timestamp: string): string {
             <CardContent className="space-y-3">
               {activeJob?.artifacts?.csv ? (
                 <Button className="w-full rounded-lg justify-start" variant="outline" asChild>
-                  <a href={activeJob.artifacts.csv} target="_blank" rel="noreferrer">
+                  <a href={resolveArtifactUrl(activeJob.artifacts.csv)} target="_blank" rel="noreferrer">
                     <Download className="h-4 w-4 mr-2" /> Download detection CSV
                   </a>
                 </Button>
@@ -430,18 +438,20 @@ function formatTime(timestamp: string): string {
               )}
               {predictionArtifacts?.csv && (
                 <Button className="w-full rounded-lg justify-start" variant="outline" asChild>
-                  <a href={predictionArtifacts.csv} target="_blank" rel="noreferrer">
+                  <a href={resolveArtifactUrl(predictionArtifacts.csv)} target="_blank" rel="noreferrer">
                     <Download className="h-4 w-4 mr-2" /> Prediction CSV
                   </a>
                 </Button>
               )}
               {predictionArtifacts?.plot && (
                 <Button className="w-full rounded-lg justify-start" variant="outline" asChild>
-                  <a href={predictionArtifacts.plot} target="_blank" rel="noreferrer">
+                  <a href={resolveArtifactUrl(predictionArtifacts.plot)} target="_blank" rel="noreferrer">
                     <Download className="h-4 w-4 mr-2" /> Prediction chart
                   </a>
                 </Button>
               )}
+
+
             </CardContent>
           </Card>
         </div>

@@ -18,8 +18,8 @@ async function startServer() {
     await ensureDirectories();
     await initializeEnvironment();
     
-    app.listen(port, () => {
-      console.log(`🚀 Fusion Starter server running on port ${port}`);
+    app.listen(Number(port), "0.0.0.0", () => {
+      console.log(`🚀 Fusion Starter server running on 0.0.0.0:${port}`);
       console.log(`📱 Frontend: http://localhost:${port}`);
       console.log(`🔧 API: http://localhost:${port}/api`);
     });

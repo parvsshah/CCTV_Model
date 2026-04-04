@@ -241,7 +241,9 @@ export default function Dashboard() {
                               variant="ghost"
                               className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                               onClick={() => {
-                                setSelectedVideo({ url: j.videoUrl!, name: j.name });
+                                const apiUrl = import.meta.env.VITE_API_URL || "";
+                                const url = j.videoUrl!.startsWith('http') ? j.videoUrl! : `${apiUrl}${j.videoUrl!}`;
+                                setSelectedVideo({ url, name: j.name });
                                 setVideoModalOpen(true);
                               }}
                             >

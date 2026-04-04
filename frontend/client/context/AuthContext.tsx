@@ -40,18 +40,28 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const login = useCallback(async (payload: AuthLoginRequest) => {
     setStatus("checking");
-    const response = await apiClient.auth.login(payload);
-    authStorage.save(response.token, response.refreshToken);
-    setUser(response.user);
-    setStatus("authenticated");
+    try {
+      const response = await apiClient.auth.login(payload);
+      authStorage.save(response.token, response.refreshToken);
+      setUser(response.user);
+      setStatus("authenticated");
+    } catch (error) {
+      setStatus("unauthenticated");
+      throw error;
+    }
   }, []);
 
   const register = useCallback(async (payload: any) => {
     setStatus("checking");
-    const response = await apiClient.auth.register(payload);
-    authStorage.save(response.token, response.refreshToken);
-    setUser(response.user);
-    setStatus("authenticated");
+    try {
+      const response = await apiClient.auth.register(payload);
+      authStorage.save(response.token, response.refreshToken);
+      setUser(response.user);
+      setStatus("authenticated");
+    } catch (error) {
+      setStatus("unauthenticated");
+      throw error;
+    }
   }, []);
 
   const logout = useCallback(async () => {
