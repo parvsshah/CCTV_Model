@@ -18,6 +18,12 @@ interface LiveProcessingBoxProps {
 function VideoFeed({ job }: LiveProcessingBoxProps) {
     const [imageKey, setImageKey] = useState(Date.now());
     const [error, setError] = useState(false);
+    const apiUrl = import.meta.env.VITE_API_URL || "";
+
+    // Resolve streamUrl against backend (for split-origin deployments)
+    const fullStreamUrl = job.streamUrl.startsWith('http')
+        ? job.streamUrl
+        : `${apiUrl}${job.streamUrl}`;
 
     // Refresh image every 500ms for smooth updates
     useEffect(() => {
@@ -39,7 +45,7 @@ function VideoFeed({ job }: LiveProcessingBoxProps) {
             <div className="relative aspect-video">
                 {!error ? (
                     <img
-                        src={`${job.streamUrl}?t=${imageKey}`}
+                        src={`${fullStreamUrl}?t=${imageKey}`}
                         alt={`Live stream for ${job.name}`}
                         className="w-full h-full object-contain"
                         onError={handleImageError}
